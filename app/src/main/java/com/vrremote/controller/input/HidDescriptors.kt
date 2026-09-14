@@ -17,8 +17,8 @@ internal object HidDescriptors {
     /** Modifier byte, reserved byte and six key slots. */
     const val KEYBOARD_REPORT_SIZE = 8
 
-    /** Volume up, volume down, home, back. */
-    const val CONSUMER_REPORT_SIZE = 1
+    /** Twelve consumer controls plus four padding bits. */
+    const val CONSUMER_REPORT_SIZE = 2
 
     /** Buttons, X, Y, wheel. */
     const val MOUSE_REPORT_SIZE = 4
@@ -59,7 +59,19 @@ internal object HidDescriptors {
         0xC0,         // End Collection
     )
 
-    /** Consumer control page for keys a keyboard collection cannot express. */
+    /**
+     * Consumer control page for the keys a keyboard collection cannot express.
+     *
+     * The kernel translates these usages into Linux key codes, which the device
+     * key layout then turns into Android key codes:
+     *
+     * 0xE9/0xEA → KEY_VOLUMEUP/DOWN → 音量键
+     * 0x223/0x224 → KEY_HOMEPAGE/KEY_BACK → 主页/返回
+     * 0xCD/0xB5/0xB6/0xB3/0xB4 → 播放暂停/下一个/上一个/快进/快退
+     * 0xE2 → KEY_MUTE → 静音
+     * 0x40 → KEY_MENU → 菜单
+     * 0x1A2 → KEY_APPSELECT → 最近任务
+     */
     val CONSUMER = hid(
         0x05, 0x0C,   // Usage Page (Consumer)
         0x09, 0x01,   // Usage (Consumer Control)
@@ -67,11 +79,19 @@ internal object HidDescriptors {
         0x15, 0x00,   //   Logical Minimum (0)
         0x25, 0x01,   //   Logical Maximum (1)
         0x75, 0x01,   //   Report Size (1)
-        0x95, 0x04,   //   Report Count (4)
+        0x95, 0x0C,   //   Report Count (12)
         0x09, 0xE9,   //   Usage (Volume Increment)
         0x09, 0xEA,   //   Usage (Volume Decrement)
         0x0A, 0x23, 0x02, // Usage (AC Home)
         0x0A, 0x24, 0x02, // Usage (AC Back)
+        0x09, 0xCD,   //   Usage (Play/Pause)
+        0x09, 0xB5,   //   Usage (Scan Next Track)
+        0x09, 0xB6,   //   Usage (Scan Previous Track)
+        0x09, 0xB3,   //   Usage (Fast Forward)
+        0x09, 0xB4,   //   Usage (Rewind)
+        0x09, 0xE2,   //   Usage (Mute)
+        0x09, 0x40,   //   Usage (Menu)
+        0x0A, 0xA2, 0x01, // Usage (Application launch, KEY_APPSELECT)
         0x81, 0x02,   //   Input (Data, Variable, Absolute)
         0x95, 0x04,   //   Report Count (4)
         0x81, 0x03,   //   Input (Constant) padding
@@ -116,17 +136,31 @@ internal object HidDescriptors {
         21 -> 0x50 // dpad left
         22 -> 0x4F // dpad right
         66 -> 0x28 // enter
+        92 -> 0x4B // page up
+        93 -> 0x4E // page down
         else -> null
     }
 
     /** Consumer bit for an Android key code, or null when it is not a consumer key. */
     fun consumerBit(keyCode: Int): Int? = when (keyCode) {
-        24 -> 0x01 // volume up
-        25 -> 0x02 // volume down
-        3 -> 0x04  // home
-        4 -> 0x08  // back
+        24 -> 0x0001 // volume up
+        25 -> 0x0002 // volume down
+        3 -> 0x0004  // home
+        4 -> 0x0008  // back
+        85 -> 0x0010 // play / pause
+        87 -> 0x0020 // next track
+        88 -> 0x0040 // previous track
+        90 -> 0x0080 // fast forward
+        89 -> 0x0100 // rewind
+        164 -> 0x0200 // mute
+        82 -> 0x0400 // menu
+        187 -> 0x0800 // app switch
         else -> null
     }
+
+    /** True when the virtual devices can produce this Android key code. */
+    fun canEmit(keyCode: Int): Boolean =
+        keyboardUsage(keyCode) != null || consumerBit(keyCode) != null
 
     /** Builds a descriptor from plain usages so the tables stay readable. */
     private fun hid(vararg values: Int): ByteArray = ByteArray(values.size) { values[it].toByte() }

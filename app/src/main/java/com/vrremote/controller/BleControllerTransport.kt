@@ -81,6 +81,9 @@ class BleControllerTransport(private val context: Context) {
         val INPUT_UUID: UUID = UUID.fromString("ffb4a651-c224-420b-a134-13d3aba313fb")
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
+        /** Every CF20 shares this name prefix; other Huawei gear does not. */
+        const val CONTROLLER_NAME_PREFIX = "HUAWEI CF20"
+
         private val RETRY_DELAYS_MS = longArrayOf(1_000, 2_000, 4_000, 8_000)
         private const val MAX_RETRIES = 5
 
@@ -238,23 +241,32 @@ class BleControllerTransport(private val context: Context) {
     }
 
     private fun handleScanResult(result: ScanResult) {
-        // Only Huawei devices are of any interest here. Everything else is
-        // filtered out before it can reach the list or the auto-connect path.
-        if (isTargetController(result)) {
-            upsert(result.device, result.rssi, fromScan = true)
+        // Anything Huawei shows up in the list; everything else is dropped before
+        // it can reach the list or the auto-connect path.
+        if (isHuaweiDevice(deviceName(result.device))) {
+            upsert(result.device, result.rssi, isControllerTarget(result), fromScan = true)
         }
         maybeAutoConnect(result)
     }
 
-    private fun isTargetController(result: ScanResult): Boolean {
+    /**
+     * Only the controller family may be connected. The list filter above is
+     * deliberately wider, but auto-connect and manual taps must never grab a
+     * Huawei watch, earbud or phone that happens to be nearby.
+     */
+    private fun isControllerTarget(result: ScanResult): Boolean {
         val advertisesService = result.scanRecord?.serviceUuids
             ?.any { it.uuid == SERVICE_UUID } == true
         return advertisesService || isControllerName(deviceName(result.device))
     }
 
-    /** The controller always carries the Huawei keyword in its advertised name. */
-    private fun isControllerName(name: String): Boolean =
+    /** Anything Huawei is worth listing, so the user can see the scan works. */
+    private fun isHuaweiDevice(name: String): Boolean =
         name.contains("HUAWEI", ignoreCase = true)
+
+    /** The controller family always starts with this prefix. */
+    private fun isControllerName(name: String): Boolean =
+        name.startsWith(CONTROLLER_NAME_PREFIX)
 
     /** The controller is the only device we ever want; pair/connect as soon as it shows up. */
     private fun maybeAutoConnect(result: ScanResult) {
@@ -262,18 +274,23 @@ class BleControllerTransport(private val context: Context) {
         if (userDisconnected) return
         if (_state.value !is ConnectionState.Scanning) return
         if (gatt != null) return
-        if (!isTargetController(result)) return
+        if (!isControllerTarget(result)) return
         Log.i(TAG, "target controller found, auto-connecting to ${result.device.address}")
         connect(result.device)
     }
 
-    private fun upsert(device: BluetoothDevice, rssi: Int, fromScan: Boolean = false) {
+    private fun upsert(
+        device: BluetoothDevice,
+        rssi: Int,
+        controller: Boolean = isControllerName(deviceName(device)),
+        fromScan: Boolean = false,
+    ) {
         val entry = DeviceEntry(
             name = deviceName(device),
             address = device.address,
             rssi = rssi,
             bonded = device.bondState == BluetoothDevice.BOND_BONDED,
-            isController = isControllerName(deviceName(device)),
+            isController = controller,
         )
         known[entry.address] = entry
         if (fromScan) schedulePublish() else publishDevices()

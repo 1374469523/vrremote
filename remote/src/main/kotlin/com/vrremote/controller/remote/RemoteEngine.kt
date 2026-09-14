@@ -124,7 +124,13 @@ class RemoteEngine(
                 consumeMotionFly(frame, pressed, actions)
             }
 
-            RemoteMode.PROFILE -> consumeProfile(frame, pressed, actions)
+            RemoteMode.PROFILE -> {
+                // The physical back and home buttons keep working in every mode.
+                // The volume keys belong to the profile here, so they are not
+                // sent twice.
+                consumeRemoteKeys(pressed, actions, includeVolume = false)
+                consumeProfile(frame, pressed, actions)
+            }
         }
 
         pressedBefore = pressed
@@ -143,8 +149,17 @@ class RemoteEngine(
         actions += RemoteAction.CycleMode
     }
 
-    private fun consumeRemoteKeys(pressed: Int, actions: MutableList<RemoteAction>) {
+    private fun consumeRemoteKeys(
+        pressed: Int,
+        actions: MutableList<RemoteAction>,
+        includeVolume: Boolean = true,
+    ) {
         for ((button, keyCode) in REMOTE_KEYS) {
+            if (!includeVolume &&
+                (button == ControllerButton.VOLUME_UP || button == ControllerButton.VOLUME_DOWN)
+            ) {
+                continue
+            }
             val bit = button.mask
             val isDown = (pressed and bit) != 0
             val wasDown = (pressedBefore and bit) != 0

@@ -71,7 +71,28 @@ class HidDescriptorsTest {
     @Test
     fun `report sizes match what the reports actually contain`() {
         assertEquals(8, HidDescriptors.KEYBOARD_REPORT_SIZE)
-        assertEquals(1, HidDescriptors.CONSUMER_REPORT_SIZE)
+        assertEquals(2, HidDescriptors.CONSUMER_REPORT_SIZE)
         assertEquals(4, HidDescriptors.MOUSE_REPORT_SIZE)
+    }
+
+    @Test
+    fun `every action key code can be emitted, or is routed through the shell`() {
+        val keyCodes = com.vrremote.controller.remote.ProfileAction.entries
+            .mapNotNull { it.keyCode }
+        assertTrue("the action list should expose key actions", keyCodes.size >= 19)
+        val missing = keyCodes.filterNot { HidDescriptors.canEmit(it) }
+        assertEquals(
+            "these keys would silently do nothing on the HID path; route them through input keyevent",
+            emptyList<Int>(),
+            missing,
+        )
+    }
+
+    @Test
+    fun `each consumer key owns a distinct bit`() {
+        val bits = com.vrremote.controller.remote.ProfileAction.entries
+            .mapNotNull { action -> HidDescriptors.consumerBit(action.keyCode ?: return@mapNotNull null) }
+        assertEquals(bits.size, bits.distinct().size)
+        assertTrue("consumer bits must fit the two byte report", bits.all { it <= 0xFFFF })
     }
 }

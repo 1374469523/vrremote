@@ -44,4 +44,13 @@ interface IControllerInput {
 
     /** Package name of the app in the foreground, or null when it is unknown. */
     String foregroundPackage() = 11;
+
+    /**
+     * Sends a key through `input keyevent`.
+     *
+     * Safety net for key codes the virtual HID devices cannot express; it is
+     * slower (it starts a process), so the HID path is preferred whenever the
+     * usage table covers the key.
+     */
+    oneway void keyEvent(int keyCode) = 12;
 }

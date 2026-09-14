@@ -185,6 +185,10 @@ class InputService : IControllerInput.Stub {
         }
     }
 
+    override fun keyEvent(keyCode: Int) {
+        gestureExecutor.execute { runInput("keyevent", keyCode.toString()) }
+    }
+
     override fun foregroundPackage(): String? {
         runningTasksPackage()?.let { return it }
         return dumpsysPackage()
@@ -202,16 +206,23 @@ class InputService : IControllerInput.Stub {
      * Fallback for devices where the task stack is not readable: the same
      * information the shell prints in `dumpsys activity activities`.
      */
-    private fun dumpsysPackage(): String? = try {
-        val process = ProcessBuilder("dumpsys", "activity", "activities")
-            .redirectErrorStream(true)
-            .start()
-        val output = process.inputStream.bufferedReader().use { it.readText() }
-        process.waitFor()
-        FOREGROUND_PATTERN.find(output)?.groupValues?.get(1)
-    } catch (error: Exception) {
-        Log.w(TAG, "dumpsys activity failed", error)
-        null
+    private fun dumpsysPackage(): String? {
+        return try {
+            val process = ProcessBuilder("dumpsys", "activity", "activities")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().use { it.readText() }
+            if (!process.waitFor(CONFIG_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroy()
+                closeQuietly(process)
+                Log.w(TAG, "dumpsys activity timed out")
+                return null
+            }
+            FOREGROUND_PATTERN.find(output)?.groupValues?.get(1)
+        } catch (error: Exception) {
+            Log.w(TAG, "dumpsys activity failed", error)
+            null
+        }
     }
 
     private fun runInput(vararg args: String) {
@@ -222,10 +233,21 @@ class InputService : IControllerInput.Stub {
             val finished = process.waitFor(CONFIG_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             if (!finished) {
                 process.destroy()
+                // Close the pipes so a child blocked on writing cannot linger.
+                closeQuietly(process)
                 Log.w(TAG, "input ${args.joinToString(" ")} timed out")
             }
         } catch (error: Exception) {
             Log.w(TAG, "input ${args.joinToString(" ")} failed", error)
+        }
+    }
+
+    private fun closeQuietly(process: Process) {
+        for (stream in listOf(process.outputStream, process.inputStream, process.errorStream)) {
+            try {
+                stream.close()
+            } catch (ignored: Exception) {
+            }
         }
     }
 
@@ -241,6 +263,13 @@ class InputService : IControllerInput.Stub {
     }
 
     private fun sendConsumerReport() {
-        consumer?.send(byteArrayOf(consumerState.toByte()))
+        // The consumer report grew to two bytes when the media, menu and app
+        // switch usages were added; little endian, low bits first.
+        consumer?.send(
+            byteArrayOf(
+                (consumerState and 0xFF).toByte(),
+                ((consumerState shr 8) and 0xFF).toByte(),
+            )
+        )
     }
 }

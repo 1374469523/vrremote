@@ -384,8 +384,22 @@ class RemoteEngineTest {
     fun `unbound touchpad triggers stay silent in profile mode`() {
         val engine = engine(RemoteMode.PROFILE, profile = profileWith())
         engine.onFrame(frame())
-        assertTrue(keys(engine.onFrame(frame(ControllerButton.BACK.mask))).isEmpty())
         assertTrue(keys(engine.onFrame(frame(ControllerButton.CONFIRM.mask))).isEmpty())
+    }
+
+    @Test
+    fun `the physical back and home buttons still work in profile mode`() {
+        val engine = engine(RemoteMode.PROFILE, profile = profileWith())
+        engine.onFrame(frame())
+        assertEquals(
+            listOf(RemoteKey.BACK),
+            keys(engine.onFrame(frame(ControllerButton.BACK.mask))),
+        )
+        engine.onFrame(frame())
+        assertEquals(
+            listOf(RemoteKey.HOME),
+            keys(engine.onFrame(frame(ControllerButton.HOME.mask))),
+        )
     }
 
     @Test

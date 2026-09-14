@@ -129,7 +129,9 @@ object RemoteCore {
                 }
             }
         }
-        scope.launch {
+        // A binder call per poll (and, on devices where the task stack cannot be
+        // read, a dumpsys process) must not run on the main thread.
+        scope.launch(Dispatchers.IO) {
             _mode.collect { mode ->
                 if (mode == RemoteMode.PROFILE) {
                     pollForegroundPackage()
