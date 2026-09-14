@@ -18,7 +18,6 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import com.vrremote.controller.protocol.ControllerButton
 import com.vrremote.controller.protocol.ControllerFrame
 import com.vrremote.controller.protocol.ControllerFrameParser
@@ -47,6 +46,7 @@ class ControllerTestActivity : Activity() {
         const val LOG_INTERVAL_MS = 200L
         const val LOG_LINES = 200
         const val TRAIL_POINTS = 50
+        const val STATUS_DURATION_MS = 2_000L
 
         val COLOR_TEXT = 0xFFE6EDF3.toInt()
         val COLOR_KEY_OFF = 0xFF2B333D.toInt()
@@ -64,6 +64,7 @@ class ControllerTestActivity : Activity() {
     private lateinit var statsText: TextView
     private lateinit var scanButton: Button
     private lateinit var deviceList: LinearLayout
+    private lateinit var statusText: TextView
     private lateinit var touchpadView: TouchpadView
     private lateinit var touchpadText: TextView
     private lateinit var motionView: MotionView
@@ -116,6 +117,7 @@ class ControllerTestActivity : Activity() {
         statsText = findViewById(R.id.statsText)
         scanButton = findViewById(R.id.scanButton)
         deviceList = findViewById(R.id.deviceList)
+        statusText = findViewById(R.id.statusText)
         touchpadView = findViewById(R.id.touchpadView)
         touchpadText = findViewById(R.id.touchpadText)
         motionView = findViewById(R.id.motionView)
@@ -356,19 +358,31 @@ class ControllerTestActivity : Activity() {
             lastRateAt = SystemClock.elapsedRealtime()
         }
         rawLog.text = ""
-        Toast.makeText(this, "日志已清空", Toast.LENGTH_SHORT).show()
+        showStatus("日志已清空")
     }
 
     private fun copyLogs() {
         val text = synchronized(lock) { rawLines.joinToString("\n") }
         if (text.isEmpty()) {
-            Toast.makeText(this, "没有可复制的数据", Toast.LENGTH_SHORT).show()
+            showStatus("没有可复制的数据")
             return
         }
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("vrremote-log", text))
-        Toast.makeText(this, "已复制 ${rawLines.size} 行", Toast.LENGTH_SHORT).show()
+        showStatus("已复制 ${rawLines.size} 行")
     }
+
+    /**
+     * Feedback lives inside the page: the app draws every message itself, so no
+     * SystemUI hook can rewrite the text on the way through.
+     */
+    private fun showStatus(message: String) {
+        statusText.text = message
+        handler.removeCallbacks(clearStatus)
+        handler.postDelayed(clearStatus, STATUS_DURATION_MS)
+    }
+
+    private val clearStatus = Runnable { statusText.text = "" }
 
     private fun requiredPermissions(): Array<String> =
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
