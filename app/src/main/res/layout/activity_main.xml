@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/stateText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="空闲"
+        android:textColor="@color/text"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/deviceText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textColor="#FF9AA7B4"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/statsText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:textColor="#FF9AA7B4"
+        android:textSize="12sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/scanButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="开始扫描" />
+
+        <Button
+            android:id="@+id/clearButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="清空日志" />
+
+        <Button
+            android:id="@+id/copyButton"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="复制全部" />
+    </LinearLayout>
+
+    <ScrollView
+        android:id="@+id/deviceScroll"
+        android:layout_width="match_parent"
+        android:layout_height="110dp"
+        android:layout_marginTop="8dp"
+        android:background="@color/panel">
+
+        <LinearLayout
+            android:id="@+id/deviceList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="6dp" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/keyTrigger"
+            android:layout_width="0dp"
+            android:layout_height="54dp"
+            android:layout_margin="3dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_block"
+            android:gravity="center"
+            android:textColor="@color/text"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/keyConfirm"
+            android:layout_width="0dp"
+            android:layout_height="54dp"
+            android:layout_margin="3dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_block"
+            android:gravity="center"
+            android:textColor="@color/text"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/keyVolumeDown"
+            android:layout_width="0dp"
+            android:layout_height="54dp"
+            android:layout_margin="3dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_block"
+            android:gravity="center"
+            android:textColor="@color/text"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/keyVolumeUp"
+            android:layout_width="0dp"
+            android:layout_height="54dp"
+            android:layout_margin="3dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_block"
+            android:gravity="center"
+            android:textColor="@color/text"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/keyHome"
+            android:layout_width="0dp"
+            android:layout_height="54dp"
+            android:layout_margin="3dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_block"
+            android:gravity="center"
+            android:textColor="@color/text"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/keyBack"
+            android:layout_width="0dp"
+            android:layout_height="54dp"
+            android:layout_margin="3dp"
+            android:layout_weight="1"
+            android:background="@drawable/key_block"
+            android:gravity="center"
+            android:textColor="@color/text"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="6dp"
+        android:layout_weight="1"
+        android:orientation="horizontal">
+
+        <com.vrremote.controller.TouchpadView
+            android:id="@+id/touchpadView"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1" />
+
+        <com.vrremote.controller.MotionView
+            android:id="@+id/motionView"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/touchpadText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="等待数据…"
+        android:textColor="#FF9AA7B4"
+        android:textSize="12sp" />
+
+    <TextView
+        android:id="@+id/motionText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="体感等待数据…"
+        android:textColor="#FF9AA7B4"
+        android:textSize="12sp" />
+
+    <ScrollView
+        android:id="@+id/rawScroll"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:layout_marginTop="6dp"
+        android:background="@color/panel">
+
+        <TextView
+            android:id="@+id/rawLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="6dp"
+            android:textColor="#FFB7C3CF"
+            android:textSize="10sp"
+            android:typeface="monospace" />
+    </ScrollView>
+</LinearLayout>
