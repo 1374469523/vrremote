@@ -175,4 +175,22 @@ class ControllerFrameParserTest {
         assertEquals(0f, frame.accX, 0f)
         assertEquals(0f, frame.gyroX, 0f)
     }
+
+    @Test
+    fun `an idle capture keeps the touchpad released`() {
+        // Also captured from the real controller: finger off the touchpad, no
+        // button held, 76 percent battery.
+        val raw = byteArrayOf(
+            0xC0.toByte(), 0xFF.toByte(), 0xE1.toByte(), 0x85.toByte(), 0x17,
+            0xDD.toByte(), 0x3D, 0x08, 0x2D, 0xFE.toByte(),
+            0xBF.toByte(), 0x03, 0x46, 0xFE.toByte(), 0x91.toByte(), 0x00,
+            0x00, 0x4C, 0x2B, 0x06,
+        )
+        val frame = (ControllerFrameParser.parse(raw) as ParsedPacket.InputFrame).frame
+
+        assertEquals(0, frame.buttonMask)
+        assertFalse(frame.touchpadTouched)
+        assertEquals(76, frame.battery)
+        assertTrue(frame.markerOk)
+    }
 }
