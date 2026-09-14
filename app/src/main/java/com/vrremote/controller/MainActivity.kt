@@ -200,9 +200,14 @@ class MainActivity : Activity() {
             return
         }
         for (entry in devices) {
-            val row = rowView("${entry.name}\n${entry.address}" +
-                if (entry.rssi != 0) "   RSSI ${entry.rssi}" else "")
-            row.setOnClickListener { RemoteCore.connect(entry.address) }
+            val suffix = if (entry.rssi != 0) "   RSSI ${entry.rssi}" else ""
+            val row = rowView("${entry.name}\n${entry.address}$suffix")
+            if (entry.isController) {
+                row.setOnClickListener { RemoteCore.connect(entry.address) }
+            } else {
+                // Only the controller can be connected; other rows are context.
+                row.setTextColor(COLOR_MUTED)
+            }
             deviceList.addView(row)
         }
     }

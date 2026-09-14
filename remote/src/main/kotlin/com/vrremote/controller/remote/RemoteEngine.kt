@@ -28,8 +28,11 @@ class RemoteEngine(
          * Rotation around the controller's yaw axis moves the cursor
          * horizontally, pitch moves it vertically. Screen Y grows downwards,
          * hence the negative pitch factor.
+         *
+         * Signs come from the real controller: turning it right makes the
+         * reported yaw component go negative, so the yaw factor is negated too.
          */
-        private const val YAW_TO_X = 1f
+        private const val YAW_TO_X = -1f
         private const val PITCH_TO_Y = -1f
 
         private val REMOTE_KEYS = listOf(

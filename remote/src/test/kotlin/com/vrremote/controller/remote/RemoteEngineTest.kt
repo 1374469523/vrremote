@@ -214,7 +214,22 @@ class RemoteEngineTest {
     }
 
     @Test
-    fun `motion fly mode moves the cursor to the right when yawing right`() {
+    fun `turning the controller right moves the cursor right`() {
+        // Measured on the real controller: turning right makes the reported yaw
+        // component negative, and that has to push the cursor to the right.
+        val engine = engine(
+            RemoteMode.FLY_MOTION,
+            RemoteSettings(flyMotionGain = 1000f, flyMotionDeadZone = 0.001f),
+        )
+        engine.onFrame(frame())
+        val actions = engine.onFrame(frame(quaternion = quat(yaw = -0.05f)))
+        val move = actions.filterIsInstance<RemoteAction.PointerMove>().single()
+        assertEquals(50, move.dx)
+        assertEquals(0, move.dy)
+    }
+
+    @Test
+    fun `turning the controller left moves the cursor left`() {
         val engine = engine(
             RemoteMode.FLY_MOTION,
             RemoteSettings(flyMotionGain = 1000f, flyMotionDeadZone = 0.001f),
@@ -222,7 +237,7 @@ class RemoteEngineTest {
         engine.onFrame(frame())
         val actions = engine.onFrame(frame(quaternion = quat(yaw = 0.05f)))
         val move = actions.filterIsInstance<RemoteAction.PointerMove>().single()
-        assertEquals(50, move.dx)
+        assertEquals(-50, move.dx)
         assertEquals(0, move.dy)
     }
 

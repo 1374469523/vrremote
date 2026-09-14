@@ -311,7 +311,7 @@ class ControllerTestActivity : Activity() {
         }
         for (entry in devices) {
             val row = rowView(deviceLabel(entry))
-            row.setOnClickListener { RemoteCore.connect(entry.address) }
+            if (entry.isController) row.setOnClickListener { RemoteCore.connect(entry.address) }
             deviceList.addView(row)
         }
     }

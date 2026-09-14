@@ -36,6 +36,8 @@ data class DeviceEntry(
     val address: String,
     val rssi: Int,
     val bonded: Boolean,
+    /** True only for the controller; every other device is listed for context. */
+    val isController: Boolean,
 )
 
 /** The single state the UI is allowed to show. */
@@ -82,6 +84,9 @@ class BleControllerTransport(private val context: Context) {
         private val RETRY_DELAYS_MS = longArrayOf(1_000, 2_000, 4_000, 8_000)
         private const val MAX_RETRIES = 5
 
+        /** A connection attempt that never reports back is abandoned after this. */
+        private const val CONNECT_TIMEOUT_MS = 12_000L
+
         /** Enough notifications to prove a channel is live without flooding logcat. */
         private const val LOGGED_NOTIFICATIONS_PER_UUID = 3
     }
@@ -103,6 +108,7 @@ class BleControllerTransport(private val context: Context) {
     private var scanning = false
     private var gatt: BluetoothGatt? = null
     private var retries = 0
+    private var connectTimeout: Runnable? = null
 
     private val notifyLogCount = HashMap<UUID, Int>()
 
@@ -228,14 +234,11 @@ class BleControllerTransport(private val context: Context) {
     private fun isTargetController(result: ScanResult): Boolean {
         val advertisesService = result.scanRecord?.serviceUuids
             ?.any { it.uuid == SERVICE_UUID } == true
-        if (advertisesService) return true
-        val name = try {
-            result.device.name
-        } catch (error: SecurityException) {
-            null
-        }
-        return name?.startsWith("HUAWEI CF20") == true
+        return advertisesService || isControllerName(deviceName(result.device))
     }
+
+    /** The controller family always advertises this name prefix. */
+    private fun isControllerName(name: String): Boolean = name.startsWith("HUAWEI CF20")
 
     /** The controller is the only device we ever want; pair/connect as soon as it shows up. */
     private fun maybeAutoConnect(result: ScanResult) {
@@ -253,6 +256,7 @@ class BleControllerTransport(private val context: Context) {
             address = device.address,
             rssi = rssi,
             bonded = device.bondState == BluetoothDevice.BOND_BONDED,
+            isController = isControllerName(deviceName(device)),
         )
         known[entry.address] = entry
         if (fromScan) schedulePublish() else publishDevices()
@@ -287,8 +291,17 @@ class BleControllerTransport(private val context: Context) {
 
     // ---------------------------------------------------------------- connecting
 
-    /** Connects to a picked device. */
+    /**
+     * Connects to a picked device.
+     *
+     * Only the controller is accepted: tapping any other row used to tear down
+     * a working link and then sit on "connecting" forever.
+     */
     fun connect(entry: DeviceEntry) {
+        if (!entry.isController) {
+            _state.value = ConnectionState.Failed("${entry.name} 不是手柄，没有连接")
+            return
+        }
         val device = try {
             adapter?.getRemoteDevice(entry.address)
         } catch (error: IllegalArgumentException) {
@@ -317,12 +330,36 @@ class BleControllerTransport(private val context: Context) {
         }
         if (gatt == null) {
             _state.value = ConnectionState.Failed("connectGatt 返回空")
+            return
         }
+        scheduleConnectTimeout(device)
+    }
+
+    /**
+     * connectGatt has no built-in timeout: an unreachable device leaves the app
+     * waiting forever, so the attempt is abandoned and reported instead.
+     */
+    private fun scheduleConnectTimeout(device: BluetoothDevice) {
+        cancelConnectTimeout()
+        val runnable = Runnable {
+            if (_state.value is ConnectionState.Connecting) {
+                closeGatt()
+                _state.value = ConnectionState.Failed("连接 ${deviceName(device)} 超时")
+            }
+        }
+        connectTimeout = runnable
+        handler.postDelayed(runnable, CONNECT_TIMEOUT_MS)
+    }
+
+    private fun cancelConnectTimeout() {
+        connectTimeout?.let { handler.removeCallbacks(it) }
+        connectTimeout = null
     }
 
     private val gattCallback = object : BluetoothGattCallback() {
 
         override fun onConnectionStateChange(callbackGatt: BluetoothGatt, status: Int, newState: Int) {
+            cancelConnectTimeout()
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     // Stop scanning here as well: the controller stays
@@ -444,6 +481,7 @@ class BleControllerTransport(private val context: Context) {
     }
 
     fun closeGatt() {
+        cancelConnectTimeout()
         val open = gatt ?: return
         gatt = null
         try {

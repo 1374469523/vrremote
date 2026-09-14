@@ -134,6 +134,13 @@ class InputBridge(private val context: Context) {
 
     /** Re-evaluates the Shizuku state and binds the user service when allowed. */
     fun refresh() {
+        // Never downgrade a live channel: the activities call this on every
+        // resume, and reporting "connecting" while the service is up would sit
+        // on screen forever because nothing re-binds.
+        if (service != null) {
+            _state.value = State.Ready
+            return
+        }
         val next = when {
             !Shizuku.pingBinder() && !isShizukuInstalled() -> State.ShizukuMissing
             !Shizuku.pingBinder() -> State.ShizukuStopped
