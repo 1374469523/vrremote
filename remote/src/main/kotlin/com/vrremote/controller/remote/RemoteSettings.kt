@@ -12,7 +12,7 @@ data class RemoteSettings(
     /** Touchpad travel (0–255 scale) that produces one direction key press. */
     val dpadStep: Int = 30,
     /** Pixels of cursor movement per touchpad unit in touchpad fly mode. */
-    val flyTouchGain: Float = 4f,
+    val flyTouchGain: Float = 6f,
     /** Pixels of cursor movement per radian of rotation in motion fly mode. */
     val flyMotionGain: Float = 2600f,
     /** Rotation smaller than this (in radians) does not move the cursor. */

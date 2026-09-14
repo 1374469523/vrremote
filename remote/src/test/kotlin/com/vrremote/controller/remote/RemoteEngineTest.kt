@@ -191,11 +191,30 @@ class RemoteEngineTest {
     }
 
     @Test
-    fun `touch fly mode ignores jitter below the dead zone`() {
-        val engine = engine(RemoteMode.FLY_TOUCH)
+    fun `slow touchpad drags accumulate instead of being dropped`() {
+        // One touchpad unit per frame is 0.4 px at gain 0.4; it has to add up
+        // rather than vanish, otherwise the cursor looks stuck.
+        val engine = engine(RemoteMode.FLY_TOUCH, RemoteSettings(flyTouchGain = 0.4f))
+        engine.onFrame(frame(x = 0, y = 0))
+        engine.onFrame(frame(x = 100, y = 100))
+        assertTrue(engine.onFrame(frame(x = 101, y = 100)).isEmpty())
+        assertTrue(engine.onFrame(frame(x = 102, y = 100)).isEmpty())
+        assertEquals(
+            listOf(RemoteAction.PointerMove(1, 0)),
+            engine.onFrame(frame(x = 103, y = 100)),
+        )
+    }
+
+    @Test
+    fun `the untouched sub-pixel remainder survives a direction change`() {
+        val engine = engine(RemoteMode.FLY_TOUCH, RemoteSettings(flyTouchGain = 0.6f))
         engine.onFrame(frame(x = 0, y = 0))
         engine.onFrame(frame(x = 50, y = 50))
-        assertTrue(engine.onFrame(frame(x = 52, y = 51)).isEmpty())
+        assertTrue(engine.onFrame(frame(x = 51, y = 50)).isEmpty())
+        assertEquals(
+            listOf(RemoteAction.PointerMove(1, -1)),
+            engine.onFrame(frame(x = 52, y = 48)),
+        )
     }
 
     // --------------------------------------------------------- motion fly mode

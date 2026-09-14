@@ -18,9 +18,6 @@ class RemoteEngine(
 ) {
 
     companion object {
-        /** Touchpad units below this are treated as no movement at all. */
-        private const val POINTER_DEAD_ZONE = 3f
-
         /** Minimum gap between two trigger-driven mode switches. */
         private const val MODE_SWITCH_DEBOUNCE_MS = 300L
 
@@ -56,6 +53,16 @@ class RemoteEngine(
     private var previousQuaternion: FloatArray? = null
     private var leftButtonDown = false
 
+    /**
+     * Sub-pixel pointer movement carried over between frames.
+     *
+     * Reports arrive about 100 times a second, so a slow drag only moves a
+     * fraction of a pixel per frame. Without this remainder the cursor would
+     * appear stuck until the finger sped up.
+     */
+    private var pendingPointerX = 0f
+    private var pendingPointerY = 0f
+
     /** Switches mode; returns the actions needed to leave the previous mode cleanly. */
     fun setMode(next: RemoteMode): List<RemoteAction> {
         if (next == mode) return emptyList()
@@ -82,6 +89,8 @@ class RemoteEngine(
         anchorX = 0
         anchorY = 0
         previousQuaternion = null
+        pendingPointerX = 0f
+        pendingPointerY = 0f
         return actions
     }
 
@@ -173,12 +182,9 @@ class RemoteEngine(
         val dy = y - anchorY
         anchorX = x
         anchorY = y
-        if (abs(dx) < POINTER_DEAD_ZONE && abs(dy) < POINTER_DEAD_ZONE) return
+        if (dx == 0 && dy == 0) return
         val gain = settings().flyTouchGain
-        actions += RemoteAction.PointerMove(
-            (dx * gain).roundToInt(),
-            (dy * gain).roundToInt(),
-        )
+        emitPointer(pendingPointerX + dx * gain, pendingPointerY + dy * gain, actions)
     }
 
     private fun consumeMotionFly(
@@ -208,7 +214,21 @@ class RemoteEngine(
         val dx = if (abs(yaw) < config.flyMotionDeadZone) 0f else yaw * config.flyMotionGain * YAW_TO_X
         val dy = if (abs(pitch) < config.flyMotionDeadZone) 0f else pitch * config.flyMotionGain * PITCH_TO_Y
         if (dx == 0f && dy == 0f) return
-        actions += RemoteAction.PointerMove(dx.roundToInt(), dy.roundToInt())
+        emitPointer(pendingPointerX + dx, pendingPointerY + dy, actions)
+    }
+
+    /**
+     * Sends whole pixels and keeps the fraction for the next frame, so slow
+     * movement is never rounded away.
+     */
+    private fun emitPointer(rawX: Float, rawY: Float, actions: MutableList<RemoteAction>) {
+        val stepX = rawX.toInt()
+        val stepY = rawY.toInt()
+        pendingPointerX = rawX - stepX
+        pendingPointerY = rawY - stepY
+        if (stepX != 0 || stepY != 0) {
+            actions += RemoteAction.PointerMove(stepX, stepY)
+        }
     }
 
     /**
