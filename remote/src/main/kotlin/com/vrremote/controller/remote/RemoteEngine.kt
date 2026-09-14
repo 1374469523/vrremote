@@ -324,14 +324,14 @@ class RemoteEngine(
             pressed = pressed,
             mask = ControllerButton.VOLUME_UP.mask,
             action = active.actionFor(ProfileTrigger.VOLUME_UP),
-            fallbackKey = RemoteKey.VOLUME_UP,
+            naturalKey = RemoteKey.VOLUME_UP,
             actions = actions,
         )
         consumePressEdge(
             pressed = pressed,
             mask = ControllerButton.VOLUME_DOWN.mask,
             action = active.actionFor(ProfileTrigger.VOLUME_DOWN),
-            fallbackKey = RemoteKey.VOLUME_DOWN,
+            naturalKey = RemoteKey.VOLUME_DOWN,
             actions = actions,
         )
 
@@ -366,17 +366,16 @@ class RemoteEngine(
         pressed: Int,
         mask: Int,
         action: ProfileAction,
-        fallbackKey: Int? = null,
+        naturalKey: Int? = null,
         actions: MutableList<RemoteAction>,
     ) {
         val isDown = (pressed and mask) != 0
         val wasDown = (pressedBefore and mask) != 0
         if (!isDown || wasDown) return
-        // The volume keys keep behaving like volume unless the app rebinds them:
-        // silently swallowing them would surprise anyone who added an app just
-        // to remap the touchpad.
-        if (action == ProfileAction.NONE && fallbackKey != null) {
-            actions += RemoteAction.KeyPress(fallbackKey)
+        // An unbound volume trigger keeps its normal job: adding an app to the
+        // list should not silently kill the volume keys.
+        if (action == ProfileAction.NONE && naturalKey != null) {
+            actions += RemoteAction.KeyPress(naturalKey)
             return
         }
         emitProfileAction(action, actions)

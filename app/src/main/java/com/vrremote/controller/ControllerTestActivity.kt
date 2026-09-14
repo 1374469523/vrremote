@@ -403,13 +403,4 @@ class ControllerTestActivity : Activity() {
         super.onDestroy()
     }
 
-    override fun onResume() {
-        super.onResume()
-        RemoteCore.onActivityResumed(this)
-    }
-
-    override fun onPause() {
-        RemoteCore.onActivityPaused()
-        super.onPause()
-    }
 }

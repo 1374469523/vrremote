@@ -216,7 +216,7 @@ class InputBridge(private val context: Context) {
         val input = service ?: return
         try {
             when (action) {
-                is RemoteAction.KeyPress -> sendKey(input, action.keyCode)
+                is RemoteAction.KeyPress -> tap(input, action.keyCode)
                 is RemoteAction.PointerMove -> movePointer(input, action.dx, action.dy)
                 is RemoteAction.PointerButton -> input.mouseButton(action.button, action.down)
                 is RemoteAction.Swipe -> swipe(input, action.direction)
@@ -235,20 +235,6 @@ class InputBridge(private val context: Context) {
             }
         } catch (error: Exception) {
             Log.w(TAG, "cannot send $action", error)
-        }
-    }
-
-    /**
-     * Keys the virtual devices can express go through HID, which is instant.
-     * Anything else is handed to `input keyevent` inside the user service, so a
-     * key can never silently do nothing.
-     */
-    private fun sendKey(input: IControllerInput, keyCode: Int) {
-        if (HidDescriptors.canEmit(keyCode)) {
-            tap(input, keyCode)
-        } else {
-            Log.i(TAG, "key $keyCode has no HID usage, sending it through input keyevent")
-            input.keyEvent(keyCode)
         }
     }
 

@@ -34,8 +34,6 @@ class InputService : IControllerInput.Stub {
         const val LONG_PRESS_MS = 700
         const val INPUT_BINARY = "/system/bin/input"
         const val CONFIG_TIMEOUT_SECONDS = 5L
-
-        val FOREGROUND_PATTERN = Regex("topResumedActivity.*? ([A-Za-z0-9_.]+)/")
     }
 
     /**
@@ -185,14 +183,12 @@ class InputService : IControllerInput.Stub {
         }
     }
 
-    override fun keyEvent(keyCode: Int) {
-        gestureExecutor.execute { runInput("keyevent", keyCode.toString()) }
-    }
-
-    override fun foregroundPackage(): String? {
-        runningTasksPackage()?.let { return it }
-        return dumpsysPackage()
-    }
+    /**
+     * The shell identity can read the task stack, so there is exactly one path.
+     * If it returns null the profile mode simply does nothing; there is no second
+     * implementation that parses dumpsys output.
+     */
+    override fun foregroundPackage(): String? = runningTasksPackage()
 
     private fun runningTasksPackage(): String? = try {
         val manager = context?.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
@@ -200,29 +196,6 @@ class InputService : IControllerInput.Stub {
     } catch (error: Exception) {
         Log.w(TAG, "getRunningTasks failed", error)
         null
-    }
-
-    /**
-     * Fallback for devices where the task stack is not readable: the same
-     * information the shell prints in `dumpsys activity activities`.
-     */
-    private fun dumpsysPackage(): String? {
-        return try {
-            val process = ProcessBuilder("dumpsys", "activity", "activities")
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().use { it.readText() }
-            if (!process.waitFor(CONFIG_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroy()
-                closeQuietly(process)
-                Log.w(TAG, "dumpsys activity timed out")
-                return null
-            }
-            FOREGROUND_PATTERN.find(output)?.groupValues?.get(1)
-        } catch (error: Exception) {
-            Log.w(TAG, "dumpsys activity failed", error)
-            null
-        }
     }
 
     private fun runInput(vararg args: String) {

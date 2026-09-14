@@ -2,7 +2,6 @@ package com.vrremote.controller
 
 import android.content.Context
 import android.util.Log
-import android.widget.Toast
 import com.vrremote.controller.input.InputBridge
 import com.vrremote.controller.remote.RemoteAction
 import com.vrremote.controller.remote.RemoteEngine
@@ -43,23 +42,6 @@ object RemoteCore {
     private val _remoteEnabled = MutableStateFlow(true)
     private val _started = MutableStateFlow(false)
     private val _foregroundPackage = MutableStateFlow<String?>(null)
-
-    /**
-     * The toast currently on screen. Android queues toasts instead of replacing
-     * them, so cycling modes quickly used to leave stale mode names on screen
-     * for seconds; cancelling first keeps the hint in step with the mode.
-     */
-    private var modeToast: Toast? = null
-
-    /**
-     * The activity that is currently visible.
-     *
-     * A toast built from an application context is handed to SystemUI, which on
-     * some devices rewrites the text (a Samsung DeX hook on the test device made
-     * the first character of every mode name wrong). With an activity context
-     * the app renders the toast itself.
-     */
-    private var foregroundContext: Context? = null
 
     val mode: StateFlow<RemoteMode> = _mode.asStateFlow()
     val remoteEnabled: StateFlow<Boolean> = _remoteEnabled.asStateFlow()
@@ -129,8 +111,7 @@ object RemoteCore {
                 }
             }
         }
-        // A binder call per poll (and, on devices where the task stack cannot be
-        // read, a dumpsys process) must not run on the main thread.
+        // A binder call per poll must not run on the main thread.
         scope.launch(Dispatchers.IO) {
             _mode.collect { mode ->
                 if (mode == RemoteMode.PROFILE) {
@@ -179,19 +160,12 @@ object RemoteCore {
         preferences.mode = mode
         _mode.value = mode
         if (!preferences.modeHints) return
-        if (modeHint.show(mode.label)) return
-        // Without the overlay appop the system toast is the only option left.
-        modeToast?.cancel()
-        modeToast = Toast.makeText(foregroundContext ?: appContext, mode.label, Toast.LENGTH_SHORT)
-            .also { it.show() }
-    }
-
-    fun onActivityResumed(context: Context) {
-        foregroundContext = context
-    }
-
-    fun onActivityPaused() {
-        foregroundContext = null
+        // One path only: the app draws the hint itself. A system toast would be
+        // rewritten by SystemUI hooks on some devices (measured on the test
+        // handset), so there is no fallback to it.
+        if (!modeHint.show(mode.label)) {
+            Log.w(TAG, "mode hint could not be shown for ${mode.label}")
+        }
     }
 
     fun setRemoteEnabled(enabled: Boolean) {

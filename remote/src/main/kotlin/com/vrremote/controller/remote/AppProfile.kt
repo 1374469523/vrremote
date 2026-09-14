@@ -16,10 +16,9 @@ enum class ProfileTrigger(val label: String) {
  *
  * Android key events come first because they are the same on every phone and in
  * every app that follows the platform conventions: volume, media transport,
- * page turning, the camera shutter key and the d-pad. Screen gestures are the
- * fallback for apps that only react to touches (a like on a short video feed,
- * for example), and they are labelled as such because they depend on where the
- * controls happen to sit on the screen.
+ * page turning and the d-pad. Screen gestures exist for apps that only react to
+ * touches (a like on a short video feed, for example); they are labelled as such
+ * because they depend on where the controls happen to sit on the screen.
  */
 enum class ProfileAction(val label: String) {
     NONE("不设置"),

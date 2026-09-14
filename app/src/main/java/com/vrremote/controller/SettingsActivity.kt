@@ -125,13 +125,4 @@ class SettingsActivity : Activity() {
         })
     }
 
-    override fun onResume() {
-        super.onResume()
-        RemoteCore.onActivityResumed(this)
-    }
-
-    override fun onPause() {
-        RemoteCore.onActivityPaused()
-        super.onPause()
-    }
 }
