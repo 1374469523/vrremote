@@ -160,7 +160,7 @@ class BleControllerTransport(private val context: Context) {
         // An already bonded controller needs no scan at all: connect directly.
         try {
             adapter.bondedDevices
-                ?.firstOrNull { it.name?.startsWith("HUAWEI CF20") == true }
+                ?.firstOrNull { isControllerName(deviceName(it)) }
                 ?.let {
                     Log.i(TAG, "bonded controller ${it.address} exists, connecting without scan")
                     connect(it)
@@ -194,7 +194,9 @@ class BleControllerTransport(private val context: Context) {
 
     fun refreshDevices() {
         try {
-            adapter?.bondedDevices?.forEach { upsert(it, 0) }
+            adapter?.bondedDevices
+                ?.filter { isControllerName(deviceName(it)) }
+                ?.forEach { upsert(it, 0) }
         } catch (error: SecurityException) {
             Log.w(TAG, "cannot read bonded devices", error)
         }
@@ -217,15 +219,9 @@ class BleControllerTransport(private val context: Context) {
     }
 
     private fun handleScanResult(result: ScanResult) {
-        // Keep the list useful: skip anonymous beacons that carry neither a
-        // name nor our service UUID. They are the bulk of scan traffic and
-        // only exist to churn the UI.
-        val hasName = try {
-            result.device.name != null
-        } catch (error: SecurityException) {
-            false
-        }
-        if (hasName || isTargetController(result)) {
+        // Only Huawei devices are of any interest here. Everything else is
+        // filtered out before it can reach the list or the auto-connect path.
+        if (isTargetController(result)) {
             upsert(result.device, result.rssi, fromScan = true)
         }
         maybeAutoConnect(result)
@@ -237,8 +233,9 @@ class BleControllerTransport(private val context: Context) {
         return advertisesService || isControllerName(deviceName(result.device))
     }
 
-    /** The controller family always advertises this name prefix. */
-    private fun isControllerName(name: String): Boolean = name.startsWith("HUAWEI CF20")
+    /** The controller always carries the Huawei keyword in its advertised name. */
+    private fun isControllerName(name: String): Boolean =
+        name.contains("HUAWEI", ignoreCase = true)
 
     /** The controller is the only device we ever want; pair/connect as soon as it shows up. */
     private fun maybeAutoConnect(result: ScanResult) {

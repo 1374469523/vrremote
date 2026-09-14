@@ -62,13 +62,13 @@
                         android:id="@+id/defaultFlyTouch"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="飞鼠1 · 触控板控制光标" />
+                        android:text="指尖鼠标 · 手指在触控板上滑动" />
 
                     <RadioButton
                         android:id="@+id/defaultFlyMotion"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="飞鼠2 · 体感控制光标" />
+                        android:text="体感鼠标 · 转动手柄带动光标" />
                 </RadioGroup>
             </LinearLayout>
 

@@ -38,21 +38,21 @@ class SettingsActivity : Activity() {
             label = findViewById(R.id.touchGainLabel),
             seek = findViewById(R.id.touchGainSeek),
             seekValue = preferences.flyTouchGain.roundToInt(),
-            text = { "飞鼠1 光标速度 $it" },
+            text = { "指尖鼠标速度 $it" },
             store = { preferences.flyTouchGain = it.toFloat() },
         )
         bindSlider(
             label = findViewById(R.id.motionGainLabel),
             seek = findViewById(R.id.motionGainSeek),
             seekValue = (preferences.flyMotionGain / 100f).roundToInt(),
-            text = { "飞鼠2 光标速度 ${it * 100}" },
+            text = { "体感鼠标速度 ${it * 100}" },
             store = { preferences.flyMotionGain = (it * 100).toFloat() },
         )
         bindSlider(
             label = findViewById(R.id.motionDeadZoneLabel),
             seek = findViewById(R.id.motionDeadZoneSeek),
             seekValue = (preferences.flyMotionDeadZone * 1000f).roundToInt(),
-            text = { "飞鼠2 死区 ${"%.3f".format(it / 1000f)}" },
+            text = { "体感鼠标死区 ${"%.3f".format(it / 1000f)}" },
             store = { preferences.flyMotionDeadZone = it / 1000f },
         )
 
