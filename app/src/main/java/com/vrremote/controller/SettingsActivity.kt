@@ -20,6 +20,9 @@ class SettingsActivity : Activity() {
     private lateinit var preferences: Preferences
     private var restoring = false
 
+    /** Re-applies a slider's value from the preferences, for "restore defaults". */
+    private val sliderRefreshers = mutableListOf<() -> Unit>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_settings)
@@ -30,35 +33,35 @@ class SettingsActivity : Activity() {
         bindSlider(
             label = findViewById(R.id.dpadStepLabel),
             seek = findViewById(R.id.dpadStepSeek),
-            seekValue = preferences.dpadStep,
+            seekValue = { preferences.dpadStep },
             text = { "方向键步长 $it（越小越灵敏）" },
             store = { preferences.dpadStep = it },
         )
         bindSlider(
             label = findViewById(R.id.touchGainLabel),
             seek = findViewById(R.id.touchGainSeek),
-            seekValue = preferences.flyTouchGain.roundToInt(),
+            seekValue = { preferences.flyTouchGain.roundToInt() },
             text = { "指尖鼠标速度 $it" },
             store = { preferences.flyTouchGain = it.toFloat() },
         )
         bindSlider(
             label = findViewById(R.id.motionGainLabel),
             seek = findViewById(R.id.motionGainSeek),
-            seekValue = (preferences.flyMotionGain / 100f).roundToInt(),
+            seekValue = { (preferences.flyMotionGain / 100f).roundToInt() },
             text = { "体感鼠标速度 ${it * 100}" },
             store = { preferences.flyMotionGain = (it * 100).toFloat() },
         )
         bindSlider(
             label = findViewById(R.id.motionDeadZoneLabel),
             seek = findViewById(R.id.motionDeadZoneSeek),
-            seekValue = (preferences.flyMotionDeadZone * 1000f).roundToInt(),
+            seekValue = { (preferences.flyMotionDeadZone * 1000f).roundToInt() },
             text = { "体感鼠标死区 ${"%.3f".format(it / 1000f)}" },
             store = { preferences.flyMotionDeadZone = it / 1000f },
         )
         bindSlider(
             label = findViewById(R.id.gestureScaleLabel),
             seek = findViewById(R.id.gestureScaleSeek),
-            seekValue = (preferences.gestureScale * 100f).roundToInt(),
+            seekValue = { (preferences.gestureScale * 100f).roundToInt() },
             text = { "手势幅度 $it%（跟随应用里的滑动距离）" },
             store = {
                 preferences.gestureScale = it.coerceAtLeast(40) / 100f
@@ -75,6 +78,17 @@ class SettingsActivity : Activity() {
         findViewById<android.widget.Button>(R.id.appProfilesButton).setOnClickListener {
             startActivity(android.content.Intent(this, AppProfilesActivity::class.java))
         }
+        findViewById<android.widget.Button>(R.id.resetTunablesButton).setOnClickListener {
+            preferences.resetTunables()
+            RemoteCore.reloadSettings()
+            // The sliders jump back to their defaults, which is the confirmation.
+            refreshSliders()
+        }
+    }
+
+    /** Every slider re-reads its value, used after restoring the defaults. */
+    private fun refreshSliders() {
+        for (refresh in sliderRefreshers) refresh()
     }
 
     private fun bindDefaultMode() {
@@ -105,13 +119,17 @@ class SettingsActivity : Activity() {
     private fun bindSlider(
         label: TextView,
         seek: SeekBar,
-        seekValue: Int,
+        seekValue: () -> Int,
         text: (Int) -> String,
         store: (Int) -> Unit,
     ) {
-        val position = seekValue.coerceIn(0, seek.max)
-        seek.progress = position
-        label.text = text(position)
+        val refresh = {
+            val position = seekValue().coerceIn(0, seek.max)
+            seek.progress = position
+            label.text = text(position)
+        }
+        sliderRefreshers += refresh
+        refresh()
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
                 val value = progress.coerceAtLeast(1)

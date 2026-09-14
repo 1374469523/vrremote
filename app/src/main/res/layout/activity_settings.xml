@@ -186,6 +186,13 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:max="140" />
+
+                <Button
+                    android:id="@+id/resetTunablesButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="恢复默认调节" />
             </LinearLayout>
 
             <LinearLayout

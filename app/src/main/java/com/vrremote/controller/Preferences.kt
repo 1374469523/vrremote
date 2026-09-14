@@ -50,6 +50,21 @@ class Preferences(context: Context) {
         gestureScale = gestureScale,
     )
 
+    /**
+     * Puts every tunable slider back to its default. The chosen mode and the
+     * hint switch are preferences, not tunables, so they stay as they are.
+     */
+    fun resetTunables() {
+        val defaults = RemoteSettings()
+        prefs.edit()
+            .putInt(KEY_DPAD_STEP, defaults.dpadStep)
+            .putFloat(KEY_TOUCH_GAIN, defaults.flyTouchGain)
+            .putFloat(KEY_MOTION_GAIN, defaults.flyMotionGain)
+            .putFloat(KEY_MOTION_DEAD_ZONE, defaults.flyMotionDeadZone)
+            .putFloat(KEY_GESTURE_SCALE, defaults.gestureScale)
+            .apply()
+    }
+
     private companion object {
         val DEFAULT = RemoteSettings()
 
