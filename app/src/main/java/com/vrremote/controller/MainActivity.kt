@@ -50,15 +50,23 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
 
         RemoteCore.init(this)
-        RemoteService.start(this)
         bindViews()
         observe()
 
         if (!hasRequiredPermissions()) {
             requestPermissions(requiredPermissions(), REQUEST_PERMISSIONS)
         } else {
-            RemoteCore.startScan()
+            startRemote()
         }
+    }
+
+    /**
+     * The foreground service needs the Bluetooth permissions granted, otherwise
+     * Android refuses the connectedDevice type outright.
+     */
+    private fun startRemote() {
+        RemoteService.start(this)
+        RemoteCore.startScan()
     }
 
     private fun bindViews() {
@@ -245,7 +253,7 @@ class MainActivity : Activity() {
             .filter { permissions[it] != Manifest.permission.POST_NOTIFICATIONS }
             .all { grantResults[it] == PackageManager.PERMISSION_GRANTED }
         if (bluetoothGranted) {
-            RemoteCore.startScan()
+            startRemote()
         } else {
             stateText.text = "缺少蓝牙权限，无法扫描手柄"
             stateText.setTextColor(COLOR_BAD)
@@ -256,7 +264,9 @@ class MainActivity : Activity() {
         super.onResume()
         if (RemoteCore.isInitialised) {
             RemoteCore.refreshInputState()
-            if (RemoteCore.connectionState.value !is ConnectionState.Ready) RemoteCore.startScan()
+            if (hasRequiredPermissions() && RemoteCore.connectionState.value !is ConnectionState.Ready) {
+                RemoteCore.startScan()
+            }
         }
         renderMode(RemoteCore.mode.value)
     }

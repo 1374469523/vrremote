@@ -134,6 +134,10 @@ class BleControllerTransport(private val context: Context) {
     // ----------------------------------------------------------------- scanning
 
     fun startScan() {
+        if (!hasPermissions()) {
+            _state.value = ConnectionState.Failed("缺少蓝牙权限")
+            return
+        }
         val adapter = adapter ?: run {
             _state.value = ConnectionState.Failed("本机没有蓝牙适配器")
             return
