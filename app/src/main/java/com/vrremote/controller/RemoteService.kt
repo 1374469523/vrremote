@@ -31,10 +31,6 @@ class RemoteService : Service() {
             val intent = Intent(context, RemoteService::class.java)
             context.startForegroundService(intent)
         }
-
-        fun stop(context: Context) {
-            context.stopService(Intent(context, RemoteService::class.java))
-        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

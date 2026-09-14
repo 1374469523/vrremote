@@ -70,4 +70,24 @@ class ProfileCodecTest {
         val decoded = ProfileCodec.decode("v1\ncom.example\t\ttrue\t")
         assertEquals("com.example", decoded.single().label)
     }
+
+    @Test
+    fun `a label with separators cannot corrupt the other entries`() {
+        val profiles = listOf(
+            AppProfile(
+                packageName = "com.example.first",
+                label = "Line\nBreak\tTabbed",
+                bindings = mapOf(ProfileTrigger.TOUCH_PRESS to ProfileAction.DOUBLE_TAP),
+            ),
+            AppProfile(packageName = "com.example.second", label = "Second"),
+        )
+
+        val decoded = ProfileCodec.decode(ProfileCodec.encode(profiles))
+
+        assertEquals(2, decoded.size)
+        val first = decoded.first { it.packageName == "com.example.first" }
+        assertEquals("Line Break Tabbed", first.label)
+        assertEquals(ProfileAction.DOUBLE_TAP, first.actionFor(ProfileTrigger.TOUCH_PRESS))
+        assertEquals("Second", decoded.first { it.packageName == "com.example.second" }.label)
+    }
 }

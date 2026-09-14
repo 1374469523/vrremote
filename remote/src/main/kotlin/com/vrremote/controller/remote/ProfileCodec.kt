@@ -22,7 +22,7 @@ object ProfileCodec {
             append(LINE_SEPARATOR)
             append(profile.packageName)
             append(FIELD_SEPARATOR)
-            append(profile.label.replace(FIELD_SEPARATOR, " "))
+            append(sanitize(profile.label))
             append(FIELD_SEPARATOR)
             append(profile.enabled)
             append(FIELD_SEPARATOR)
@@ -64,4 +64,14 @@ object ProfileCodec {
             bindings = bindings,
         )
     }
+
+    /**
+     * App labels come from other apps, so they can contain the separators this
+     * format relies on. A stray tab or line break would split the entry and shift
+     * every profile after it, so both are folded into spaces.
+     */
+    private fun sanitize(text: String): String = text
+        .replace(LINE_SEPARATOR, " ")
+        .replace("\r", " ")
+        .replace(FIELD_SEPARATOR, " ")
 }

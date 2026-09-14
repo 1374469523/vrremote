@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.launch
 
 /**
@@ -211,6 +212,10 @@ object RemoteCore {
         if (!_started.value) return
         transport.stop()
         bridge.stop()
+        // The collectors are started by init(); without this a restarted service
+        // would stack another set on top of the ones that are already running.
+        scope.coroutineContext.cancelChildren()
+        _foregroundPackage.value = null
         _started.value = false
         Log.i(TAG, "shut down")
     }
