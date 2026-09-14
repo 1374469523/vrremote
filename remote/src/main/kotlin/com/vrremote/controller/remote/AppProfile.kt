@@ -106,10 +106,10 @@ data class AppProfile(
  * equivalent and therefore uses a screen gesture.
  */
 enum class ProfileTemplate(val label: String, val description: String) {
-    NOVEL("小说阅读", "左右点击翻页，上下滑动滚动，按下确定"),
-    SHORT_VIDEO("短视频", "上下滑动切换，按下双击点赞"),
-    CAMERA("相机", "按下就是快门（发音量键，和蓝牙自拍器一样）"),
-    BLANK("空白", "全部从“不设置”开始，自己配"),
+    NOVEL("小说阅读", "左右翻页"),
+    SHORT_VIDEO("短视频", "上下切换，按下点赞"),
+    CAMERA("相机", "音量键拍照"),
+    BLANK("空白", "自己配置"),
     ;
 
     fun bindings(): Map<ProfileTrigger, ProfileAction> = when (this) {

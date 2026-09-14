@@ -107,7 +107,7 @@ class AppPickerActivity : Activity() {
     private fun chooseTemplate(app: AppEntry) {
         val labels = ProfileTemplate.entries.map { "${it.label} — ${it.description}" }.toTypedArray()
         AlertDialog.Builder(this)
-            .setTitle("给「${app.label}」套用哪个模板？")
+            .setTitle("选择模板")
             .setItems(labels) { _, index ->
                 RemoteCore.profiles.add(app.packageName, app.label, ProfileTemplate.entries[index])
                 startActivity(
