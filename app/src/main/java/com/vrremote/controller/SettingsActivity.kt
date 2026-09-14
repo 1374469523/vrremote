@@ -108,4 +108,14 @@ class SettingsActivity : Activity() {
             override fun onStopTrackingTouch(bar: SeekBar) = Unit
         })
     }
+
+    override fun onResume() {
+        super.onResume()
+        RemoteCore.onActivityResumed(this)
+    }
+
+    override fun onPause() {
+        RemoteCore.onActivityPaused()
+        super.onPause()
+    }
 }

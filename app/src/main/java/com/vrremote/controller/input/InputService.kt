@@ -108,6 +108,21 @@ class InputService : IControllerInput.Stub() {
         System.exit(0)
     }
 
+    override fun grantOverlayPermission(packageName: String): Boolean {
+        return try {
+            val process = ProcessBuilder(
+                "appops", "set", packageName, "SYSTEM_ALERT_WINDOW", "allow",
+            ).redirectErrorStream(true).start()
+            val finished = process.waitFor()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            Log.i(TAG, "appops exit=$finished $output")
+            finished == 0
+        } catch (error: Exception) {
+            Log.w(TAG, "cannot grant overlay appop", error)
+            false
+        }
+    }
+
     private fun sendKeyboardReport() {
         val report = ByteArray(HidDescriptors.KEYBOARD_REPORT_SIZE)
         var index = 2

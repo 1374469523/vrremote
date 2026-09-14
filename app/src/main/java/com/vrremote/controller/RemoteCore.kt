@@ -32,11 +32,29 @@ object RemoteCore {
     private lateinit var transport: BleControllerTransport
     private lateinit var bridge: InputBridge
     private lateinit var engine: RemoteEngine
+    private lateinit var modeHint: ModeHintOverlay
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _mode = MutableStateFlow(RemoteMode.NORMAL)
     private val _remoteEnabled = MutableStateFlow(true)
     private val _started = MutableStateFlow(false)
+
+    /**
+     * The toast currently on screen. Android queues toasts instead of replacing
+     * them, so cycling modes quickly used to leave stale mode names on screen
+     * for seconds; cancelling first keeps the hint in step with the mode.
+     */
+    private var modeToast: Toast? = null
+
+    /**
+     * The activity that is currently visible.
+     *
+     * A toast built from an application context is handed to SystemUI, which on
+     * some devices rewrites the text (a Samsung DeX hook on the test device made
+     * the first character of every mode name wrong). With an activity context
+     * the app renders the toast itself.
+     */
+    private var foregroundContext: Context? = null
 
     val mode: StateFlow<RemoteMode> = _mode.asStateFlow()
     val remoteEnabled: StateFlow<Boolean> = _remoteEnabled.asStateFlow()
@@ -63,6 +81,7 @@ object RemoteCore {
             initialMode = preferences.mode,
             settings = { preferences.remoteSettings() },
         )
+        modeHint = ModeHintOverlay(appContext)
         _mode.value = preferences.mode
         _remoteEnabled.value = preferences.remoteEnabled
 
@@ -122,9 +141,20 @@ object RemoteCore {
     private fun applyMode(mode: RemoteMode) {
         preferences.mode = mode
         _mode.value = mode
-        if (preferences.modeHints) {
-            Toast.makeText(appContext, mode.label, Toast.LENGTH_SHORT).show()
-        }
+        if (!preferences.modeHints) return
+        if (modeHint.show(mode.label)) return
+        // Without the overlay appop the system toast is the only option left.
+        modeToast?.cancel()
+        modeToast = Toast.makeText(foregroundContext ?: appContext, mode.label, Toast.LENGTH_SHORT)
+            .also { it.show() }
+    }
+
+    fun onActivityResumed(context: Context) {
+        foregroundContext = context
+    }
+
+    fun onActivityPaused() {
+        foregroundContext = null
     }
 
     fun setRemoteEnabled(enabled: Boolean) {

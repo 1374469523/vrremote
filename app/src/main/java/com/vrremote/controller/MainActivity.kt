@@ -274,6 +274,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        RemoteCore.onActivityResumed(this)
         if (RemoteCore.isInitialised) {
             RemoteCore.refreshInputState()
             if (hasRequiredPermissions() && RemoteCore.connectionState.value !is ConnectionState.Ready) {
@@ -286,5 +287,10 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()
+    }
+
+    override fun onPause() {
+        RemoteCore.onActivityPaused()
+        super.onPause()
     }
 }

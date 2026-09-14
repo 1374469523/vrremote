@@ -24,6 +24,16 @@
 手机上装了 [Shizuku](https://shizuku.rikka.app/) 并且已经启动，然后在 App 里授权。
 没有 Shizuku 时手柄测试页仍然可用，但遥控和光标不会生效。
 
+模式切换的提示条是 App 自己画的悬浮窗，需要的 `SYSTEM_ALERT_WINDOW` 权限由
+Shizuku 自动授予（`appops set … allow`），不需要手动去设置里点。
+
+### 为什么不用系统 Toast
+
+Android 12 之后 Toast 由 SystemUI 渲染。测试机上装了一个 DeX 模块
+（`com.flexunlock.dexlsp`）hook 了 `NotificationManagerService.enqueueToastForDex`，
+经它转发的 Toast 文本第一个字会被改掉一个字节（「指尖鼠标」变成「挈尖鼠标」）。
+App 里的字符串本身是好的，所以提示条改成自绘，绕开这条通道。
+
 ## 工程结构
 
 | 模块 | 作用 |

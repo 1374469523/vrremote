@@ -108,6 +108,13 @@ class InputBridge(private val context: Context) {
                 return
             }
             service = input
+            // Best effort: lets the app draw its own mode hint instead of a
+            // toast, which some devices rewrite.
+            try {
+                input.grantOverlayPermission(context.packageName)
+            } catch (error: Exception) {
+                Log.w(TAG, "overlay appop not granted", error)
+            }
             _state.value = State.Ready
         }
 

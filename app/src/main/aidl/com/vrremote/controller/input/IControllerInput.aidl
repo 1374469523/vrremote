@@ -23,4 +23,13 @@ interface IControllerInput {
     oneway void mouseButton(int button, boolean down) = 4;
 
     void closeDevices() = 5;
+
+    /**
+     * Allows the app to draw its own on-screen hint.
+     *
+     * Some devices rewrite toast text (a DeX hook did on the test device), so
+     * the mode hint is drawn by the app instead; this grants the appop needed
+     * for that, using the shell identity that is already running this service.
+     */
+    boolean grantOverlayPermission(String packageName) = 6;
 }
