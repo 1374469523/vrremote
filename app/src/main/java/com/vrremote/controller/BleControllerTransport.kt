@@ -68,8 +68,15 @@ class BleControllerTransport(private val context: Context) {
         private const val TAG = "VrRemoteBle"
 
         val SERVICE_UUID: UUID = UUID.fromString("622f5b2a-60da-4484-929a-69e3a9140258")
-        val NOTIFY_UUID: UUID = UUID.fromString("233827E5-09CC-45A4-A59B-4D024138CBBE")
-        val SECONDARY_NOTIFY_UUID: UUID = UUID.fromString("ffb4a651-c224-420b-a134-13d3aba313fb")
+        /**
+         * The channel that actually carries the 20 byte input report.
+         *
+         * Huawei's client enables 233827E5 first and this one half a second
+         * later, which makes it look like both are needed. Measured on the real
+         * controller: subscribing to this characteristic alone streams input at
+         * ~100 packets per second, and 233827E5 delivers nothing.
+         */
+        val INPUT_UUID: UUID = UUID.fromString("ffb4a651-c224-420b-a134-13d3aba313fb")
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
         private val RETRY_DELAYS_MS = longArrayOf(1_000, 2_000, 4_000, 8_000)
@@ -97,9 +104,6 @@ class BleControllerTransport(private val context: Context) {
     private var gatt: BluetoothGatt? = null
     private var retries = 0
 
-    /** Notify characteristics still waiting for their CCCD write to complete. */
-    private val pendingNotify = ArrayDeque<BluetoothGattCharacteristic>()
-    private var pendingName = "手柄"
     private val notifyLogCount = HashMap<UUID, Int>()
 
     // ---------------------------------------------------------------- lifecycle
@@ -346,21 +350,34 @@ class BleControllerTransport(private val context: Context) {
                 _state.value = ConnectionState.Failed("设备上没有目标服务 $SERVICE_UUID")
                 return
             }
-            val characteristic = service.getCharacteristic(NOTIFY_UUID)
+            val characteristic = service.getCharacteristic(INPUT_UUID)
             if (characteristic == null) {
-                _state.value = ConnectionState.Failed("目标服务里没有通知特征值 $NOTIFY_UUID")
+                _state.value = ConnectionState.Failed("目标服务里没有输入特征值 $INPUT_UUID")
                 return
             }
-            // The controller keeps quiet until both of its notify
-            // characteristics are enabled. Huawei's own client subscribes to
-            // E5 first and to the second channel right after, so the second
-            // write is chained onto the first descriptor callback instead of
-            // being fired in parallel.
-            pendingNotify.clear()
-            pendingNotify.addLast(characteristic)
-            service.getCharacteristic(SECONDARY_NOTIFY_UUID)?.let { pendingNotify.addLast(it) }
-            pendingName = name
-            enableNextNotification()
+            if (!callbackGatt.setCharacteristicNotification(characteristic, true)) {
+                _state.value = ConnectionState.Failed("无法开启本地通知")
+                return
+            }
+            val cccd = characteristic.getDescriptor(CCCD_UUID)
+            if (cccd == null) {
+                _state.value = ConnectionState.Failed("输入特征值缺少 CCCD 描述符")
+                return
+            }
+            _state.value = ConnectionState.Subscribing(name)
+            val enable = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            val accepted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                callbackGatt.writeDescriptor(cccd, enable) == BluetoothGatt.GATT_SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                run {
+                    cccd.value = enable
+                    callbackGatt.writeDescriptor(cccd)
+                }
+            }
+            if (!accepted) {
+                _state.value = ConnectionState.Failed("写入 CCCD 被拒绝")
+            }
         }
 
         override fun onDescriptorWrite(
@@ -373,7 +390,10 @@ class BleControllerTransport(private val context: Context) {
                 _state.value = ConnectionState.Failed("CCCD 写入返回 $status")
                 return
             }
-            enableNextNotification()
+            _state.value = ConnectionState.Ready(
+                deviceName(callbackGatt.device),
+                callbackGatt.device.address,
+            )
         }
 
         @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
@@ -395,61 +415,14 @@ class BleControllerTransport(private val context: Context) {
         }
     }
 
-    /**
-     * Every notification is logged with its characteristic UUID. The controller
-     * has two notify-capable characteristics and only one carries input, so the
-     * raw UUID is the fastest way to tell "the controller sent nothing" apart
-     * from "we listened on the wrong one".
-     */
     private fun deliver(characteristic: BluetoothGattCharacteristic, value: ByteArray) {
+        if (characteristic.uuid != INPUT_UUID) return
         val logged = notifyLogCount[characteristic.uuid] ?: 0
         if (logged < LOGGED_NOTIFICATIONS_PER_UUID) {
             notifyLogCount[characteristic.uuid] = logged + 1
             Log.i(TAG, "notify ${characteristic.uuid} ${value.size} bytes")
         }
-        if (characteristic.uuid != NOTIFY_UUID &&
-            characteristic.uuid != SECONDARY_NOTIFY_UUID
-        ) {
-            return
-        }
         _packets.tryEmit(value.copyOf())
-    }
-
-    /** Enables the next queued notify characteristic, one GATT write at a time. */
-    private fun enableNextNotification() {
-        val open = gatt ?: return
-        val characteristic = pendingNotify.removeFirstOrNull() ?: run {
-            _state.value = ConnectionState.Ready(pendingName, open.device.address)
-            return
-        }
-        if (characteristic.uuid != NOTIFY_UUID) {
-            // The secondary channel is subscribed for the controller's sake; its
-            // payload is not part of the input protocol.
-            Log.i(TAG, "enabling secondary notify ${characteristic.uuid}")
-        }
-        if (!open.setCharacteristicNotification(characteristic, true)) {
-            _state.value = ConnectionState.Failed("无法开启本地通知 ${characteristic.uuid}")
-            return
-        }
-        val cccd = characteristic.getDescriptor(CCCD_UUID)
-        if (cccd == null) {
-            _state.value = ConnectionState.Failed("通知特征值缺少 CCCD 描述符")
-            return
-        }
-        _state.value = ConnectionState.Subscribing(pendingName)
-        val enable = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-        val accepted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            open.writeDescriptor(cccd, enable) == BluetoothGatt.GATT_SUCCESS
-        } else {
-            @Suppress("DEPRECATION")
-            run {
-                cccd.value = enable
-                open.writeDescriptor(cccd)
-            }
-        }
-        if (!accepted) {
-            _state.value = ConnectionState.Failed("写入 CCCD 被拒绝 ${characteristic.uuid}")
-        }
     }
 
     private fun scheduleReconnect(device: BluetoothDevice, status: Int) {
