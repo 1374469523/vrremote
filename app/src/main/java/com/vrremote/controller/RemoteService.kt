@@ -5,10 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.Process
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +33,20 @@ class RemoteService : Service() {
             val intent = Intent(context, RemoteService::class.java)
             context.startForegroundService(intent)
         }
+
+        /**
+         * Stops the service explicitly and ends the process.
+         *
+         * Stopping first matters: the service is START_STICKY, so simply killing
+         * the process would let the system start it again. An explicit stop
+         * clears that.
+         */
+        fun exit(context: Context) {
+            RemoteCore.shutdown()
+            context.stopService(Intent(context, RemoteService::class.java))
+            (context as? Activity)?.finishAffinity()
+            Process.killProcess(Process.myPid())
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -52,7 +68,10 @@ class RemoteService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         RemoteCore.init(this)
-        return START_STICKY
+        // Not sticky: the service is alive while the user wants it, and the exit
+        // button's stop is final. With START_STICKY the system would restart the
+        // service (and its notification) right after the process ended.
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

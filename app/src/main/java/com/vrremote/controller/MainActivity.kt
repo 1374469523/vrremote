@@ -101,6 +101,11 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.settingsButton).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
+        findViewById<Button>(R.id.exitButton).setOnClickListener {
+            // Stops the service, drops the controller link and the Shizuku user
+            // service, then ends the process so nothing keeps running.
+            RemoteService.exit(this)
+        }
 
         modeGroup.setOnCheckedChangeListener { _, checkedId ->
             RemoteCore.setMode(
