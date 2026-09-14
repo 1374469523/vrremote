@@ -21,6 +21,11 @@ android {
         }
     }
 
+    buildFeatures {
+        aidl = true
+        buildConfig = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -33,5 +38,8 @@ android {
 
 dependencies {
     implementation(project(":protocol"))
+    implementation(project(":remote"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
 }

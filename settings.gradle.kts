@@ -16,4 +16,5 @@ dependencyResolutionManagement {
 rootProject.name = "vrremote-kotlin"
 
 include(":protocol")
+include(":remote")
 include(":app")

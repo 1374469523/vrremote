@@ -1,0 +1,225 @@
+package com.vrremote.controller.input
+
+import android.content.ComponentName
+import android.content.Context
+import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import android.os.IBinder
+import android.util.Log
+import com.vrremote.controller.BuildConfig
+import com.vrremote.controller.remote.RemoteAction
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import rikka.shizuku.Shizuku
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+/**
+ * App-side half of the injection channel.
+ *
+ * Shizuku runs [InputService] with the shell identity; this class owns the
+ * permission flow, the binding and the key tap timing. Its states mirror what
+ * the UI has to explain, so a failure is never silent.
+ */
+class InputBridge(private val context: Context) {
+
+    sealed interface State {
+        /** Shizuku (or Sui) is not installed on this device. */
+        data object ShizukuMissing : State
+
+        /** Installed but not running, e.g. it was not started after a reboot. */
+        data object ShizukuStopped : State
+
+        /** Running, but this app was never granted access. */
+        data object PermissionNeeded : State
+
+        data object Connecting : State
+
+        data object Ready : State
+
+        data class Failed(val message: String) : State
+    }
+
+    private companion object {
+        const val TAG = "VrRemoteInput"
+        const val PERMISSION_REQUEST_CODE = 4210
+        const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
+
+        /** How long a key stays down; the controller itself only sends edges. */
+        const val TAP_HOLD_MS = 20L
+    }
+
+    private val _state = MutableStateFlow<State>(State.ShizukuMissing)
+    val state: StateFlow<State> = _state.asStateFlow()
+
+    private val tapExecutor = Executors.newSingleThreadScheduledExecutor { runnable ->
+        Thread(runnable, "input-tap").apply { isDaemon = true }
+    }
+
+    private var service: IControllerInput? = null
+    private var bound = false
+
+    private val serviceArgs = Shizuku.UserServiceArgs(
+        ComponentName(context.packageName, InputService::class.java.name)
+    )
+        .daemon(false)
+        .processNameSuffix("input")
+        .debuggable(BuildConfig.DEBUG)
+        .version(BuildConfig.VERSION_CODE)
+
+    private val permissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                connect()
+            } else {
+                _state.value = State.PermissionNeeded
+            }
+        }
+    }
+
+    private val binderReceivedListener = Shizuku.OnBinderReceivedListener { refresh() }
+
+    private val binderDeadListener = Shizuku.OnBinderDeadListener {
+        service = null
+        bound = false
+        _state.value = State.ShizukuStopped
+    }
+
+    private val connection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            if (binder == null || !binder.pingBinder()) {
+                _state.value = State.Failed("Shizuku 用户服务连接失败")
+                return
+            }
+            val input = IControllerInput.Stub.asInterface(binder)
+            val result = try {
+                input.createDevices()
+            } catch (error: Exception) {
+                Log.w(TAG, "createDevices failed", error)
+                _state.value = State.Failed("创建虚拟键鼠失败：${error.message}")
+                return
+            }
+            if (result != 0) {
+                _state.value = State.Failed(describeOpenFailure(result))
+                return
+            }
+            service = input
+            _state.value = State.Ready
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) {
+            service = null
+            bound = false
+            _state.value = State.Failed("Shizuku 用户服务已断开")
+        }
+    }
+
+    fun start() {
+        Shizuku.addRequestPermissionResultListener(permissionListener)
+        Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
+        Shizuku.addBinderDeadListener(binderDeadListener)
+        refresh()
+    }
+
+    fun stop() {
+        try {
+            Shizuku.removeRequestPermissionResultListener(permissionListener)
+            Shizuku.removeBinderReceivedListener(binderReceivedListener)
+            Shizuku.removeBinderDeadListener(binderDeadListener)
+        } catch (ignored: IllegalStateException) {
+        }
+        disconnect()
+    }
+
+    /** Re-evaluates the Shizuku state and binds the user service when allowed. */
+    fun refresh() {
+        val next = when {
+            !Shizuku.pingBinder() && !isShizukuInstalled() -> State.ShizukuMissing
+            !Shizuku.pingBinder() -> State.ShizukuStopped
+            Shizuku.isPreV11() -> State.Failed("Shizuku 版本过旧，需要 11 或更高")
+            Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED -> State.Connecting
+            else -> State.PermissionNeeded
+        }
+        _state.value = next
+        if (next == State.Connecting) connect()
+    }
+
+    fun requestPermission() {
+        if (!Shizuku.pingBinder()) {
+            _state.value = if (isShizukuInstalled()) State.ShizukuStopped else State.ShizukuMissing
+            return
+        }
+        Shizuku.requestPermission(PERMISSION_REQUEST_CODE)
+    }
+
+    private fun connect() {
+        if (bound) return
+        _state.value = State.Connecting
+        try {
+            Shizuku.bindUserService(serviceArgs, connection)
+            bound = true
+        } catch (error: Throwable) {
+            Log.w(TAG, "bindUserService failed", error)
+            _state.value = State.Failed("无法绑定 Shizuku 用户服务：${error.message}")
+        }
+    }
+
+    fun disconnect() {
+        val current = service
+        service = null
+        if (current != null) {
+            try {
+                current.closeDevices()
+            } catch (ignored: Exception) {
+            }
+        }
+        if (bound) {
+            bound = false
+            try {
+                Shizuku.unbindUserService(serviceArgs, connection, true)
+            } catch (ignored: Exception) {
+            }
+        }
+    }
+
+    /** Sends one engine action to the virtual devices. */
+    fun send(action: RemoteAction) {
+        val input = service ?: return
+        try {
+            when (action) {
+                is RemoteAction.KeyPress -> tap(input, action.keyCode)
+                is RemoteAction.PointerMove -> input.mouseMove(action.dx, action.dy)
+                is RemoteAction.PointerButton -> input.mouseButton(action.button, action.down)
+                RemoteAction.CycleMode -> Unit
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "cannot send $action", error)
+        }
+    }
+
+    private fun tap(input: IControllerInput, keyCode: Int) {
+        input.key(keyCode, true)
+        tapExecutor.schedule({
+            try {
+                input.key(keyCode, false)
+            } catch (ignored: Exception) {
+            }
+        }, TAP_HOLD_MS, TimeUnit.MILLISECONDS)
+    }
+
+    private fun isShizukuInstalled(): Boolean = try {
+        context.packageManager.getPackageInfo(SHIZUKU_PACKAGE, 0)
+        true
+    } catch (ignored: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /** Turns an errno style code from the user service into something readable. */
+    private fun describeOpenFailure(code: Int): String = when (code) {
+        -13 -> "系统拒绝了 /dev/uhid 的访问（EACCES）"
+        -2 -> "系统里没有 /dev/uhid"
+        -1 -> "打开 /dev/uhid 被拒绝（EPERM）"
+        else -> "打开 /dev/uhid 失败，错误码 $code"
+    }
+}

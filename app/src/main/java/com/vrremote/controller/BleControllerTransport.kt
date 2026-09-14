@@ -45,7 +45,7 @@ sealed class ConnectionState(val label: String) {
     class Connecting(name: String) : ConnectionState("连接中 · $name")
     class Discovering(name: String) : ConnectionState("发现服务 · $name")
     class Subscribing(name: String) : ConnectionState("订阅通知 · $name")
-    class Ready(name: String, val address: String) : ConnectionState("已就绪 · $name")
+    class Ready(val name: String, val address: String) : ConnectionState("已就绪 · $name")
     class Disconnected(reason: String) : ConnectionState("已断开 · $reason")
     class Failed(message: String) : ConnectionState("错误 · $message")
 }
