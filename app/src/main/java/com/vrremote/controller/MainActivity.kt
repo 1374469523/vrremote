@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var stateText: TextView
     private lateinit var deviceText: TextView
     private lateinit var scanButton: Button
+    private lateinit var disconnectButton: Button
     private lateinit var remoteSwitchButton: Button
     private lateinit var modeGroup: RadioGroup
     private lateinit var shizukuText: TextView
@@ -66,13 +67,14 @@ class MainActivity : Activity() {
      */
     private fun startRemote() {
         RemoteService.start(this)
-        RemoteCore.startScan()
+        RemoteCore.autoScan()
     }
 
     private fun bindViews() {
         stateText = findViewById(R.id.stateText)
         deviceText = findViewById(R.id.deviceText)
         scanButton = findViewById(R.id.scanButton)
+        disconnectButton = findViewById(R.id.disconnectButton)
         remoteSwitchButton = findViewById(R.id.remoteSwitchButton)
         modeGroup = findViewById(R.id.modeGroup)
         shizukuText = findViewById(R.id.shizukuText)
@@ -82,6 +84,7 @@ class MainActivity : Activity() {
         scanButton.setOnClickListener {
             if (RemoteCore.isScanning()) RemoteCore.stopScan() else RemoteCore.startScan()
         }
+        disconnectButton.setOnClickListener { RemoteCore.disconnect() }
         remoteSwitchButton.setOnClickListener {
             RemoteCore.setRemoteEnabled(!RemoteCore.remoteEnabled.value)
         }
@@ -143,6 +146,10 @@ class MainActivity : Activity() {
         scanButton.isEnabled = state !is ConnectionState.Ready &&
             state !is ConnectionState.Connecting &&
             state !is ConnectionState.Subscribing
+        disconnectButton.isEnabled = state is ConnectionState.Ready ||
+            state is ConnectionState.Connecting ||
+            state is ConnectionState.Discovering ||
+            state is ConnectionState.Subscribing
 
         val ready = state as? ConnectionState.Ready
         deviceText.text = when {
@@ -270,7 +277,7 @@ class MainActivity : Activity() {
         if (RemoteCore.isInitialised) {
             RemoteCore.refreshInputState()
             if (hasRequiredPermissions() && RemoteCore.connectionState.value !is ConnectionState.Ready) {
-                RemoteCore.startScan()
+                RemoteCore.autoScan()
             }
         }
         renderMode(RemoteCore.mode.value)

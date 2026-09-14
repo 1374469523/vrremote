@@ -140,9 +140,13 @@ object RemoteCore {
 
     fun startScan() = transport.startScan()
 
+    fun autoScan() = transport.autoScan()
+
     fun stopScan() = transport.stopScan()
 
     fun isScanning() = transport.isScanning()
+
+    fun disconnect() = transport.disconnect()
 
     fun connect(address: String) {
         transport.devices.value.firstOrNull { it.address == address }?.let { transport.connect(it) }

@@ -68,13 +68,20 @@
                         android:text="开始扫描" />
 
                     <Button
-                        android:id="@+id/remoteSwitchButton"
+                        android:id="@+id/disconnectButton"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="10dp"
                         android:layout_weight="1"
-                        android:text="遥控已开启" />
+                        android:text="断开连接" />
                 </LinearLayout>
+
+                <Button
+                    android:id="@+id/remoteSwitchButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="遥控已开启" />
             </LinearLayout>
 
             <LinearLayout

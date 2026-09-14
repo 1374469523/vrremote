@@ -14,7 +14,7 @@ data class RemoteSettings(
     /** Pixels of cursor movement per touchpad unit in touchpad fly mode. */
     val flyTouchGain: Float = 4f,
     /** Pixels of cursor movement per radian of rotation in motion fly mode. */
-    val flyMotionGain: Float = 1200f,
+    val flyMotionGain: Float = 2600f,
     /** Rotation smaller than this (in radians) does not move the cursor. */
-    val flyMotionDeadZone: Float = 0.002f,
+    val flyMotionDeadZone: Float = 0.001f,
 )

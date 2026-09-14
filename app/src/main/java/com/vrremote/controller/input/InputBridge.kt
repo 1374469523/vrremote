@@ -48,6 +48,9 @@ class InputBridge(private val context: Context) {
 
         /** How long a key stays down; the controller itself only sends edges. */
         const val TAP_HOLD_MS = 20L
+
+        /** A relative HID report carries signed bytes. */
+        const val MAX_REPORT_DELTA = 127
     }
 
     private val _state = MutableStateFlow<State>(State.ShizukuMissing)
@@ -196,12 +199,29 @@ class InputBridge(private val context: Context) {
         try {
             when (action) {
                 is RemoteAction.KeyPress -> tap(input, action.keyCode)
-                is RemoteAction.PointerMove -> input.mouseMove(action.dx, action.dy)
+                is RemoteAction.PointerMove -> movePointer(input, action.dx, action.dy)
                 is RemoteAction.PointerButton -> input.mouseButton(action.button, action.down)
                 RemoteAction.CycleMode -> Unit
             }
         } catch (error: Exception) {
             Log.w(TAG, "cannot send $action", error)
+        }
+    }
+
+    /**
+     * A relative mouse report carries signed bytes, so anything beyond ±127 has
+     * to be split. Without this, a fast turn is silently clipped and the cursor
+     * falls behind the hand.
+     */
+    private fun movePointer(input: IControllerInput, dx: Int, dy: Int) {
+        var remainingX = dx
+        var remainingY = dy
+        while (remainingX != 0 || remainingY != 0) {
+            val stepX = remainingX.coerceIn(-MAX_REPORT_DELTA, MAX_REPORT_DELTA)
+            val stepY = remainingY.coerceIn(-MAX_REPORT_DELTA, MAX_REPORT_DELTA)
+            input.mouseMove(stepX, stepY)
+            remainingX -= stepX
+            remainingY -= stepY
         }
     }
 

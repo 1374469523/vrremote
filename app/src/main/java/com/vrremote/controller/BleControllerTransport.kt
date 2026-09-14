@@ -109,6 +109,7 @@ class BleControllerTransport(private val context: Context) {
     private var gatt: BluetoothGatt? = null
     private var retries = 0
     private var connectTimeout: Runnable? = null
+    private var userDisconnected = false
 
     private val notifyLogCount = HashMap<UUID, Int>()
 
@@ -140,6 +141,20 @@ class BleControllerTransport(private val context: Context) {
     // ----------------------------------------------------------------- scanning
 
     fun startScan() {
+        userDisconnected = false
+        beginScan()
+    }
+
+    /**
+     * Scan only when nobody asked to stay disconnected; used by the pages when
+     * they come back to the foreground.
+     */
+    fun autoScan() {
+        if (userDisconnected) return
+        beginScan()
+    }
+
+    private fun beginScan() {
         if (!hasPermissions()) {
             _state.value = ConnectionState.Failed("缺少蓝牙权限")
             return
@@ -152,6 +167,10 @@ class BleControllerTransport(private val context: Context) {
             _state.value = ConnectionState.Failed("蓝牙未开启")
             return
         }
+        // Scanning would overwrite a live "ready" state with "scanning", and
+        // auto-connect is skipped while a link exists, so the label would stick
+        // even though the controller keeps streaming.
+        if (gatt != null) return
         if (scanning) return
         val scanner = adapter.bluetoothLeScanner ?: run {
             _state.value = ConnectionState.Failed("蓝牙扫描器不可用")
@@ -240,6 +259,7 @@ class BleControllerTransport(private val context: Context) {
     /** The controller is the only device we ever want; pair/connect as soon as it shows up. */
     private fun maybeAutoConnect(result: ScanResult) {
         if (!scanning) return
+        if (userDisconnected) return
         if (_state.value !is ConnectionState.Scanning) return
         if (gatt != null) return
         if (!isTargetController(result)) return
@@ -372,7 +392,11 @@ class BleControllerTransport(private val context: Context) {
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     val device = callbackGatt.device
                     closeGatt()
-                    scheduleReconnect(device, status)
+                    if (userDisconnected) {
+                        _state.value = ConnectionState.Disconnected("HUAWEI CF20")
+                    } else {
+                        scheduleReconnect(device, status)
+                    }
                 }
             }
         }
@@ -474,7 +498,9 @@ class BleControllerTransport(private val context: Context) {
         _state.value = ConnectionState.Disconnected(
             "$name 已断开，第 $retries 次重连将在 ${delay / 1000}s 后（状态 $status）"
         )
-        handler.postDelayed({ openGatt(device) }, delay)
+        handler.postDelayed({
+            if (!userDisconnected) openGatt(device)
+        }, delay)
     }
 
     fun closeGatt() {
@@ -489,5 +515,17 @@ class BleControllerTransport(private val context: Context) {
             open.close()
         } catch (ignored: Exception) {
         }
+    }
+
+    /**
+     * Drops the link on purpose. Auto-reconnect and the scan stay off until the
+     * user asks for a scan again.
+     */
+    fun disconnect() {
+        userDisconnected = true
+        cancelConnectTimeout()
+        stopScan()
+        closeGatt()
+        _state.value = ConnectionState.Disconnected("HUAWEI CF20")
     }
 }
