@@ -43,8 +43,6 @@ enum class ProfileAction(val label: String) {
     KEY_MEDIA_FAST_FORWARD("快进"),
     KEY_PAGE_UP("上一页"),
     KEY_PAGE_DOWN("下一页"),
-    KEY_CAMERA("拍照键（老式硬件键，多数相机不响应）"),
-    KEY_FOCUS("对焦键（同上）"),
 
     SWIPE_UP("屏幕手势 · 向上滑动"),
     SWIPE_DOWN("屏幕手势 · 向下滑动"),
@@ -80,8 +78,6 @@ enum class ProfileAction(val label: String) {
             KEY_MEDIA_FAST_FORWARD -> 90
             KEY_PAGE_UP -> 92
             KEY_PAGE_DOWN -> 93
-            KEY_CAMERA -> 27
-            KEY_FOCUS -> 80
             else -> null
         }
 }

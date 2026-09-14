@@ -25,6 +25,18 @@
         android:name="android.hardware.bluetooth_le"
         android:required="true" />
 
+    <!--
+        Android 11 and later hide other apps unless the manifest asks for them.
+        Without this block the app picker only ever shows the preinstalled apps,
+        so anything the user installed (a reader, a video app) would be missing.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:name=".RemoteApplication"
