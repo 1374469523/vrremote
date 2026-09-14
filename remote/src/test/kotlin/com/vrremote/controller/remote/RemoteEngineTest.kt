@@ -14,7 +14,13 @@ class RemoteEngineTest {
     private fun engine(
         mode: RemoteMode = RemoteMode.NORMAL,
         settings: RemoteSettings = RemoteSettings(),
-    ) = RemoteEngine(initialMode = mode, settings = { settings }, clock = { now })
+        profile: AppProfile? = null,
+    ) = RemoteEngine(
+        initialMode = mode,
+        settings = { settings },
+        profile = { profile },
+        clock = { now },
+    )
 
     private fun frame(
         buttons: Int = 0,
@@ -90,10 +96,11 @@ class RemoteEngineTest {
     }
 
     @Test
-    fun `mode cycle order is normal then touch then motion`() {
+    fun `mode cycle walks every mode and wraps around`() {
         assertEquals(RemoteMode.FLY_TOUCH, RemoteMode.NORMAL.next())
         assertEquals(RemoteMode.FLY_MOTION, RemoteMode.FLY_TOUCH.next())
-        assertEquals(RemoteMode.NORMAL, RemoteMode.FLY_MOTION.next())
+        assertEquals(RemoteMode.PROFILE, RemoteMode.FLY_MOTION.next())
+        assertEquals(RemoteMode.NORMAL, RemoteMode.PROFILE.next())
     }
 
     @Test
@@ -313,6 +320,212 @@ class RemoteEngineTest {
         engine.onFrame(frame(ControllerButton.BACK.mask))
         engine.reset()
         assertTrue(keys(engine.onFrame(frame(ControllerButton.BACK.mask))).isNotEmpty())
+    }
+
+    // -------------------------------------------------------------- following
+
+    private fun profileWith(vararg bindings: Pair<ProfileTrigger, ProfileAction>) =
+        AppProfile(
+            packageName = "com.example.app",
+            label = "Example",
+            bindings = bindings.toMap(),
+        )
+
+    private fun gestures(actions: List<RemoteAction>) =
+        actions.filter { it !is RemoteAction.KeyPress && it !== RemoteAction.CycleMode }
+
+    @Test
+    fun `profile mode does nothing without a profile`() {
+        val engine = engine(RemoteMode.PROFILE)
+        engine.onFrame(frame())
+        val actions = engine.onFrame(frame(ControllerButton.CONFIRM.mask, x = 120, y = 120))
+        assertTrue(actions.isEmpty())
+    }
+
+    @Test
+    fun `profile mode ignores a disabled profile`() {
+        val engine = engine(
+            RemoteMode.PROFILE,
+            profile = profileWith(ProfileTrigger.TOUCH_PRESS to ProfileAction.TAP_CENTER)
+                .copy(enabled = false),
+        )
+        engine.onFrame(frame())
+        assertTrue(engine.onFrame(frame(ControllerButton.CONFIRM.mask)).isEmpty())
+    }
+
+    @Test
+    fun `profile mode fires the bound action for each trigger`() {
+        val engine = engine(
+            RemoteMode.PROFILE,
+            profile = profileWith(
+                ProfileTrigger.TOUCH_PRESS to ProfileAction.DOUBLE_TAP,
+                ProfileTrigger.VOLUME_UP to ProfileAction.KEY_BACK,
+                ProfileTrigger.VOLUME_DOWN to ProfileAction.SWIPE_LEFT,
+            ),
+        )
+        engine.onFrame(frame())
+        assertEquals(
+            listOf(RemoteAction.DoubleTap(TapPosition.CENTER)),
+            engine.onFrame(frame(ControllerButton.CONFIRM.mask)),
+        )
+        engine.onFrame(frame())
+        assertEquals(
+            listOf(RemoteAction.KeyPress(RemoteKey.BACK)),
+            engine.onFrame(frame(ControllerButton.VOLUME_UP.mask)),
+        )
+        engine.onFrame(frame())
+        assertEquals(
+            listOf(RemoteAction.Swipe(SwipeDirection.LEFT)),
+            engine.onFrame(frame(ControllerButton.VOLUME_DOWN.mask)),
+        )
+    }
+
+    @Test
+    fun `unbound touchpad triggers stay silent in profile mode`() {
+        val engine = engine(RemoteMode.PROFILE, profile = profileWith())
+        engine.onFrame(frame())
+        assertTrue(keys(engine.onFrame(frame(ControllerButton.BACK.mask))).isEmpty())
+        assertTrue(keys(engine.onFrame(frame(ControllerButton.CONFIRM.mask))).isEmpty())
+    }
+
+    @Test
+    fun `the volume keys keep working when a profile does not rebind them`() {
+        val engine = engine(RemoteMode.PROFILE, profile = profileWith())
+        engine.onFrame(frame())
+        assertEquals(
+            listOf(RemoteKey.VOLUME_UP),
+            keys(engine.onFrame(frame(ControllerButton.VOLUME_UP.mask))),
+        )
+        engine.onFrame(frame())
+        assertEquals(
+            listOf(RemoteKey.VOLUME_DOWN),
+            keys(engine.onFrame(frame(ControllerButton.VOLUME_DOWN.mask))),
+        )
+    }
+
+    @Test
+    fun `a swipe in profile mode fires once and re-arms on release`() {
+        val engine = engine(
+            RemoteMode.PROFILE,
+            profile = profileWith(ProfileTrigger.TOUCH_UP to ProfileAction.SWIPE_UP),
+        )
+        engine.onFrame(frame(x = 100, y = 200))
+        assertEquals(
+            listOf(RemoteAction.Swipe(SwipeDirection.UP)),
+            engine.onFrame(frame(x = 100, y = 150)),
+        )
+        assertTrue("a long drag must not repeat", engine.onFrame(frame(x = 100, y = 40)).isEmpty())
+        engine.onFrame(frame(x = 0, y = 0))
+        engine.onFrame(frame(x = 100, y = 200))
+        assertEquals(
+            listOf(RemoteAction.Swipe(SwipeDirection.UP)),
+            engine.onFrame(frame(x = 100, y = 150)),
+        )
+    }
+
+    @Test
+    fun `a short touch in profile mode fires nothing`() {
+        val engine = engine(
+            RemoteMode.PROFILE,
+            profile = profileWith(ProfileTrigger.TOUCH_LEFT to ProfileAction.SWIPE_LEFT),
+        )
+        engine.onFrame(frame(x = 100, y = 100))
+        assertTrue(engine.onFrame(frame(x = 120, y = 108)).isEmpty())
+    }
+
+    @Test
+    fun `the dominant axis picks the profile trigger`() {
+        val engine = engine(
+            RemoteMode.PROFILE,
+            profile = profileWith(
+                ProfileTrigger.TOUCH_RIGHT to ProfileAction.SWIPE_RIGHT,
+                ProfileTrigger.TOUCH_DOWN to ProfileAction.SWIPE_DOWN,
+            ),
+        )
+        engine.onFrame(frame(x = 30, y = 30))
+        assertEquals(
+            listOf(RemoteAction.Swipe(SwipeDirection.DOWN)),
+            engine.onFrame(frame(x = 60, y = 120)),
+        )
+    }
+
+    @Test
+    fun `switching away from profile mode clears the swipe latch`() {
+        val engine = engine(
+            RemoteMode.PROFILE,
+            profile = profileWith(ProfileTrigger.TOUCH_UP to ProfileAction.SWIPE_UP),
+        )
+        engine.onFrame(frame(x = 0, y = 200))
+        engine.onFrame(frame(x = 100, y = 150))
+        engine.setMode(RemoteMode.NORMAL)
+        engine.setMode(RemoteMode.PROFILE)
+        engine.onFrame(frame(x = 100, y = 150))
+        assertEquals(
+            listOf(RemoteAction.Swipe(SwipeDirection.UP)),
+            engine.onFrame(frame(x = 100, y = 100)),
+        )
+    }
+
+    @Test
+    fun `the trigger still cycles modes in profile mode`() {
+        val engine = engine(RemoteMode.PROFILE, profile = profileWith())
+        assertEquals(listOf(RemoteAction.CycleMode), engine.onFrame(frame(ControllerButton.TRIGGER.mask)))
+    }
+
+    @Test
+    fun `templates produce the documented bindings`() {
+        assertEquals(
+            ProfileAction.DOUBLE_TAP,
+            ProfileTemplate.SHORT_VIDEO.bindings()[ProfileTrigger.TOUCH_PRESS],
+        )
+        assertEquals(
+            ProfileAction.TAP_LEFT,
+            ProfileTemplate.NOVEL.bindings()[ProfileTrigger.TOUCH_LEFT],
+        )
+        assertEquals(
+            ProfileAction.KEY_VOLUME_UP,
+            ProfileTemplate.CAMERA.bindings()[ProfileTrigger.VOLUME_UP],
+        )
+        assertEquals(
+            ProfileAction.KEY_CAMERA,
+            ProfileTemplate.CAMERA.bindings()[ProfileTrigger.TOUCH_PRESS],
+        )
+        assertEquals(
+            ProfileAction.KEY_ENTER,
+            ProfileTemplate.NOVEL.bindings()[ProfileTrigger.TOUCH_PRESS],
+        )
+        assertTrue(ProfileTemplate.BLANK.bindings().isEmpty())
+    }
+
+    @Test
+    fun `every key action carries an Android key code`() {
+        val keyActions = ProfileAction.entries.filter { it.name.startsWith("KEY_") }
+        assertTrue(keyActions.isNotEmpty())
+        for (action in keyActions) {
+            assertTrue("$action needs a key code", action.keyCode != null)
+        }
+        assertTrue(ProfileAction.SWIPE_UP.keyCode == null)
+    }
+
+    @Test
+    fun `binding an action and clearing it round trips`() {
+        val profile = AppProfile("pkg", "Label")
+        val bound = profile.withBinding(ProfileTrigger.TOUCH_PRESS, ProfileAction.LONG_PRESS)
+        assertEquals(ProfileAction.LONG_PRESS, bound.actionFor(ProfileTrigger.TOUCH_PRESS))
+        assertEquals(
+            ProfileAction.NONE,
+            bound.withBinding(ProfileTrigger.TOUCH_PRESS, ProfileAction.NONE)
+                .actionFor(ProfileTrigger.TOUCH_PRESS),
+        )
+    }
+
+    @Test
+    fun `applying a template replaces every binding`() {
+        val profile = AppProfile("pkg", "Label")
+            .withBinding(ProfileTrigger.TOUCH_LEFT, ProfileAction.TAP_LEFT)
+        val camera = ProfileTemplate.CAMERA.applyTo(profile)
+        assertEquals(ProfileAction.NONE, camera.actionFor(ProfileTrigger.TOUCH_LEFT))
+        assertEquals(ProfileAction.KEY_VOLUME_DOWN, camera.actionFor(ProfileTrigger.VOLUME_DOWN))
     }
 
     /** Small-angle quaternion: rotation of `angle` radians around one axis. */

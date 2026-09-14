@@ -1,6 +1,10 @@
 package com.vrremote.controller.input
 
+import android.app.ActivityManager
+import android.content.Context
 import android.util.Log
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Runs inside the Shizuku user service process with the shell identity, which
@@ -9,11 +13,37 @@ import android.util.Log
  * Shizuku instantiates this class by name, so it must stay public and keep a
  * no-argument constructor.
  */
-class InputService : IControllerInput.Stub() {
+class InputService : IControllerInput.Stub {
+
+    private var context: Context? = null
+
+    /** Shizuku instantiates this when no Context is available. */
+    @Suppress("unused")
+    constructor() : super()
+
+    /** Shizuku can hand the service a Context; used to look up the top task. */
+    @Suppress("unused")
+    constructor(context: Context) : super() {
+        this.context = context
+    }
 
     private companion object {
         const val TAG = "VrRemoteInput"
         const val MAX_KEYS = 6
+        const val DOUBLE_TAP_GAP_MS = 90L
+        const val LONG_PRESS_MS = 700
+        const val INPUT_BINARY = "/system/bin/input"
+        const val CONFIG_TIMEOUT_SECONDS = 5L
+
+        val FOREGROUND_PATTERN = Regex("topResumedActivity.*? ([A-Za-z0-9_.]+)/")
+    }
+
+    /**
+     * Gestures are serialised on one thread: two synthetic touches overlapping
+     * would confuse the app being controlled.
+     */
+    private val gestureExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "gesture").apply { isDaemon = true }
     }
 
     private var keyboard: UhidDevice? = null
@@ -120,6 +150,82 @@ class InputService : IControllerInput.Stub() {
         } catch (error: Exception) {
             Log.w(TAG, "cannot grant overlay appop", error)
             false
+        }
+    }
+
+    override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int) {
+        gestureExecutor.execute {
+            runInput("swipe", x1.toString(), y1.toString(), x2.toString(), y2.toString(), durationMs.toString())
+        }
+    }
+
+    override fun tap(x: Int, y: Int) {
+        gestureExecutor.execute { runInput("tap", x.toString(), y.toString()) }
+    }
+
+    override fun doubleTap(x: Int, y: Int) {
+        gestureExecutor.execute {
+            runInput("tap", x.toString(), y.toString())
+            try {
+                Thread.sleep(DOUBLE_TAP_GAP_MS)
+            } catch (ignored: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return@execute
+            }
+            runInput("tap", x.toString(), y.toString())
+        }
+    }
+
+    override fun longPress(x: Int, y: Int) {
+        gestureExecutor.execute {
+            runInput(
+                "swipe",
+                x.toString(), y.toString(), x.toString(), y.toString(), LONG_PRESS_MS.toString(),
+            )
+        }
+    }
+
+    override fun foregroundPackage(): String? {
+        runningTasksPackage()?.let { return it }
+        return dumpsysPackage()
+    }
+
+    private fun runningTasksPackage(): String? = try {
+        val manager = context?.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+        manager?.getRunningTasks(1)?.firstOrNull()?.topActivity?.packageName
+    } catch (error: Exception) {
+        Log.w(TAG, "getRunningTasks failed", error)
+        null
+    }
+
+    /**
+     * Fallback for devices where the task stack is not readable: the same
+     * information the shell prints in `dumpsys activity activities`.
+     */
+    private fun dumpsysPackage(): String? = try {
+        val process = ProcessBuilder("dumpsys", "activity", "activities")
+            .redirectErrorStream(true)
+            .start()
+        val output = process.inputStream.bufferedReader().use { it.readText() }
+        process.waitFor()
+        FOREGROUND_PATTERN.find(output)?.groupValues?.get(1)
+    } catch (error: Exception) {
+        Log.w(TAG, "dumpsys activity failed", error)
+        null
+    }
+
+    private fun runInput(vararg args: String) {
+        try {
+            val command = mutableListOf(INPUT_BINARY)
+            command.addAll(args)
+            val process = ProcessBuilder(command).redirectErrorStream(true).start()
+            val finished = process.waitFor(CONFIG_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroy()
+                Log.w(TAG, "input ${args.joinToString(" ")} timed out")
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "input ${args.joinToString(" ")} failed", error)
         }
     }
 

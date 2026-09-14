@@ -23,6 +23,12 @@ object RemoteButton {
     const val LEFT = 1
 }
 
+/** Directions a swipe gesture can travel in. */
+enum class SwipeDirection { UP, DOWN, LEFT, RIGHT }
+
+/** Where a tap or long press lands on the screen. */
+enum class TapPosition { LEFT, CENTER, RIGHT, BOTTOM }
+
 /** One thing the controller wants the phone to do. */
 sealed interface RemoteAction {
 
@@ -31,6 +37,14 @@ sealed interface RemoteAction {
     data class PointerMove(val dx: Int, val dy: Int) : RemoteAction
 
     data class PointerButton(val button: Int, val down: Boolean) : RemoteAction
+
+    data class Swipe(val direction: SwipeDirection) : RemoteAction
+
+    data class Tap(val position: TapPosition) : RemoteAction
+
+    data class DoubleTap(val position: TapPosition) : RemoteAction
+
+    data class LongPress(val position: TapPosition) : RemoteAction
 
     /** The trigger was pressed; the owner advances to the next mode. */
     data object CycleMode : RemoteAction

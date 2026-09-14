@@ -69,7 +69,45 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="体感鼠标 · 转动手柄带动光标" />
+
+                    <RadioButton
+                        android:id="@+id/defaultProfile"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="跟随应用 · 按 App 自己的配置" />
                 </RadioGroup>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_background"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="跟随应用"
+                    android:textColor="@color/light_text"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="给每个 App 单独配置手柄按键的功能"
+                    android:textColor="@color/light_text_dim"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/appProfilesButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="应用名单" />
             </LinearLayout>
 
             <LinearLayout
@@ -134,6 +172,20 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:max="20" />
+
+                <TextView
+                    android:id="@+id/gestureScaleLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:textColor="@color/light_text"
+                    android:textSize="15sp" />
+
+                <SeekBar
+                    android:id="@+id/gestureScaleSeek"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="140" />
             </LinearLayout>
 
             <LinearLayout

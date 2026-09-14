@@ -107,6 +107,7 @@ class MainActivity : Activity() {
                 when (checkedId) {
                     R.id.modeFlyTouch -> RemoteMode.FLY_TOUCH
                     R.id.modeFlyMotion -> RemoteMode.FLY_MOTION
+                    R.id.modeProfile -> RemoteMode.PROFILE
                     else -> RemoteMode.NORMAL
                 }
             )
@@ -163,6 +164,7 @@ class MainActivity : Activity() {
             RemoteMode.NORMAL -> R.id.modeNormal
             RemoteMode.FLY_TOUCH -> R.id.modeFlyTouch
             RemoteMode.FLY_MOTION -> R.id.modeFlyMotion
+            RemoteMode.PROFILE -> R.id.modeProfile
         }
         if (modeGroup.checkedRadioButtonId != id) modeGroup.check(id)
     }

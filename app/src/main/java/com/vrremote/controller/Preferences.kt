@@ -38,11 +38,16 @@ class Preferences(context: Context) {
         get() = prefs.getFloat(KEY_MOTION_DEAD_ZONE, DEFAULT.flyMotionDeadZone)
         set(value) = prefs.edit().putFloat(KEY_MOTION_DEAD_ZONE, value).apply()
 
+    var gestureScale: Float
+        get() = prefs.getFloat(KEY_GESTURE_SCALE, DEFAULT.gestureScale)
+        set(value) = prefs.edit().putFloat(KEY_GESTURE_SCALE, value).apply()
+
     fun remoteSettings() = RemoteSettings(
         dpadStep = dpadStep,
         flyTouchGain = flyTouchGain,
         flyMotionGain = flyMotionGain,
         flyMotionDeadZone = flyMotionDeadZone,
+        gestureScale = gestureScale,
     )
 
     private companion object {
@@ -55,5 +60,6 @@ class Preferences(context: Context) {
         const val KEY_TOUCH_GAIN = "touch_gain"
         const val KEY_MOTION_GAIN = "motion_gain"
         const val KEY_MOTION_DEAD_ZONE = "motion_dead_zone"
+        const val KEY_GESTURE_SCALE = "gesture_scale"
     }
 }

@@ -132,6 +132,12 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="体感鼠标 · 转动手柄带动光标" />
+
+                    <RadioButton
+                        android:id="@+id/modeProfile"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="跟随应用 · 按 App 自己的配置" />
                 </RadioGroup>
             </LinearLayout>
 

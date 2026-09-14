@@ -4,10 +4,15 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.graphics.Point
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import android.view.WindowManager
 import com.vrremote.controller.BuildConfig
 import com.vrremote.controller.remote.RemoteAction
+import com.vrremote.controller.remote.SwipeDirection
+import com.vrremote.controller.remote.TapPosition
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,6 +56,9 @@ class InputBridge(private val context: Context) {
 
         /** A relative HID report carries signed bytes. */
         const val MAX_REPORT_DELTA = 127
+
+        /** How long a synthetic swipe takes. */
+        const val SWIPE_DURATION_MS = 200
     }
 
     private val _state = MutableStateFlow<State>(State.ShizukuMissing)
@@ -62,6 +70,9 @@ class InputBridge(private val context: Context) {
 
     private var service: IControllerInput? = null
     private var bound = false
+
+    /** Scales every gesture distance; kept in sync with the settings screen. */
+    var gestureScale: Float = 1f
 
     private val serviceArgs = Shizuku.UserServiceArgs(
         ComponentName(context.packageName, InputService::class.java.name)
@@ -208,11 +219,97 @@ class InputBridge(private val context: Context) {
                 is RemoteAction.KeyPress -> tap(input, action.keyCode)
                 is RemoteAction.PointerMove -> movePointer(input, action.dx, action.dy)
                 is RemoteAction.PointerButton -> input.mouseButton(action.button, action.down)
+                is RemoteAction.Swipe -> swipe(input, action.direction)
+                is RemoteAction.Tap -> tapAt(input, action.position)
+                is RemoteAction.DoubleTap -> {
+                    val point = pointOf(action.position)
+                    input.doubleTap(point.x, point.y)
+                }
+
+                is RemoteAction.LongPress -> {
+                    val point = pointOf(action.position)
+                    input.longPress(point.x, point.y)
+                }
+
                 RemoteAction.CycleMode -> Unit
             }
         } catch (error: Exception) {
             Log.w(TAG, "cannot send $action", error)
         }
+    }
+
+    /** Package of the app in the foreground, or null when it cannot be read. */
+    fun foregroundPackage(): String? = try {
+        service?.foregroundPackage()
+    } catch (error: Exception) {
+        Log.w(TAG, "cannot read the foreground package", error)
+        null
+    }
+
+    // ------------------------------------------------------------- gestures
+
+    private fun swipe(input: IControllerInput, direction: SwipeDirection) {
+        val size = screenSize()
+        val scale = gestureScale.coerceIn(0.2f, 3f)
+        val centreX = size.x / 2f
+        val centreY = size.y / 2f
+        val horizontal = size.x * 0.2f * scale
+        val vertical = size.y * 0.15f * scale
+        val fromX: Float
+        val fromY: Float
+        val toX: Float
+        val toY: Float
+        when (direction) {
+            SwipeDirection.UP -> {
+                fromX = centreX; fromY = centreY + vertical
+                toX = centreX; toY = centreY - vertical
+            }
+
+            SwipeDirection.DOWN -> {
+                fromX = centreX; fromY = centreY - vertical
+                toX = centreX; toY = centreY + vertical
+            }
+
+            SwipeDirection.LEFT -> {
+                fromX = centreX + horizontal; fromY = centreY
+                toX = centreX - horizontal; toY = centreY
+            }
+
+            SwipeDirection.RIGHT -> {
+                fromX = centreX - horizontal; fromY = centreY
+                toX = centreX + horizontal; toY = centreY
+            }
+        }
+        input.swipe(fromX.toInt(), fromY.toInt(), toX.toInt(), toY.toInt(), SWIPE_DURATION_MS)
+    }
+
+    private fun tapAt(input: IControllerInput, position: TapPosition) {
+        val point = pointOf(position)
+        input.tap(point.x, point.y)
+    }
+
+    private fun pointOf(position: TapPosition): Point {
+        val size = screenSize()
+        return when (position) {
+            TapPosition.LEFT -> Point((size.x * 0.25f).toInt(), size.y / 2)
+            TapPosition.CENTER -> Point(size.x / 2, size.y / 2)
+            TapPosition.RIGHT -> Point((size.x * 0.75f).toInt(), size.y / 2)
+            TapPosition.BOTTOM -> Point(size.x / 2, (size.y * 0.88f).toInt())
+        }
+    }
+
+    private fun screenSize(): Point {
+        val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val bounds = windowManager.currentWindowMetrics.bounds
+            return Point(bounds.width(), bounds.height())
+        }
+        @Suppress("DEPRECATION")
+        val display = windowManager.defaultDisplay
+        val metrics = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION")
+        display.getRealMetrics(metrics)
+        return Point(metrics.widthPixels, metrics.heightPixels)
     }
 
     /**

@@ -55,11 +55,25 @@ class SettingsActivity : Activity() {
             text = { "体感鼠标死区 ${"%.3f".format(it / 1000f)}" },
             store = { preferences.flyMotionDeadZone = it / 1000f },
         )
+        bindSlider(
+            label = findViewById(R.id.gestureScaleLabel),
+            seek = findViewById(R.id.gestureScaleSeek),
+            seekValue = (preferences.gestureScale * 100f).roundToInt(),
+            text = { "手势幅度 $it%（跟随应用里的滑动距离）" },
+            store = {
+                preferences.gestureScale = it.coerceAtLeast(40) / 100f
+                RemoteCore.reloadSettings()
+            },
+        )
 
         val hintSwitch = findViewById<Switch>(R.id.hintSwitch)
         hintSwitch.isChecked = preferences.modeHints
         hintSwitch.setOnCheckedChangeListener { _, checked ->
             if (!restoring) preferences.modeHints = checked
+        }
+
+        findViewById<android.widget.Button>(R.id.appProfilesButton).setOnClickListener {
+            startActivity(android.content.Intent(this, AppProfilesActivity::class.java))
         }
     }
 
@@ -71,6 +85,7 @@ class SettingsActivity : Activity() {
                 RemoteMode.NORMAL -> R.id.defaultNormal
                 RemoteMode.FLY_TOUCH -> R.id.defaultFlyTouch
                 RemoteMode.FLY_MOTION -> R.id.defaultFlyMotion
+                RemoteMode.PROFILE -> R.id.defaultProfile
             }
         )
         restoring = false
@@ -79,6 +94,7 @@ class SettingsActivity : Activity() {
             val mode = when (checkedId) {
                 R.id.defaultFlyTouch -> RemoteMode.FLY_TOUCH
                 R.id.defaultFlyMotion -> RemoteMode.FLY_MOTION
+                R.id.defaultProfile -> RemoteMode.PROFILE
                 else -> RemoteMode.NORMAL
             }
             preferences.mode = mode

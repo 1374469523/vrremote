@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -26,6 +28,7 @@ import kotlinx.coroutines.launch
 object RemoteCore {
 
     private const val TAG = "VrRemoteCore"
+    private const val FOREGROUND_POLL_MS = 400L
 
     private lateinit var appContext: Context
     private lateinit var preferences: Preferences
@@ -33,11 +36,13 @@ object RemoteCore {
     private lateinit var bridge: InputBridge
     private lateinit var engine: RemoteEngine
     private lateinit var modeHint: ModeHintOverlay
+    private lateinit var profileStore: ProfileStore
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val _mode = MutableStateFlow(RemoteMode.NORMAL)
     private val _remoteEnabled = MutableStateFlow(true)
     private val _started = MutableStateFlow(false)
+    private val _foregroundPackage = MutableStateFlow<String?>(null)
 
     /**
      * The toast currently on screen. Android queues toasts instead of replacing
@@ -60,6 +65,9 @@ object RemoteCore {
     val remoteEnabled: StateFlow<Boolean> = _remoteEnabled.asStateFlow()
     val started: StateFlow<Boolean> = _started.asStateFlow()
 
+    /** Package of the app in front; only tracked while the profile mode is on. */
+    val foregroundPackage: StateFlow<String?> = _foregroundPackage.asStateFlow()
+
     lateinit var connectionState: StateFlow<ConnectionState>
         private set
     lateinit var devices: StateFlow<List<DeviceEntry>>
@@ -75,13 +83,16 @@ object RemoteCore {
         if (_started.value) return
         appContext = context.applicationContext
         preferences = Preferences(appContext)
+        profileStore = ProfileStore(appContext)
         transport = BleControllerTransport(appContext)
         bridge = InputBridge(appContext)
         engine = RemoteEngine(
             initialMode = preferences.mode,
             settings = { preferences.remoteSettings() },
+            profile = { _foregroundPackage.value?.let { profileStore.find(it) } },
         )
         modeHint = ModeHintOverlay(appContext)
+        bridge.gestureScale = preferences.gestureScale
         _mode.value = preferences.mode
         _remoteEnabled.value = preferences.remoteEnabled
 
@@ -117,6 +128,30 @@ object RemoteCore {
                     dispatch(engine.reset())
                 }
             }
+        }
+        scope.launch {
+            _mode.collect { mode ->
+                if (mode == RemoteMode.PROFILE) {
+                    pollForegroundPackage()
+                } else {
+                    _foregroundPackage.value = null
+                }
+            }
+        }
+    }
+
+    /**
+     * Only the profile mode cares which app is in front, so the lookup runs only
+     * while it is active: one binder call every 400 ms, no process spawn.
+     */
+    private suspend fun pollForegroundPackage() {
+        while (scope.isActive && _mode.value == RemoteMode.PROFILE) {
+            val packageName = bridge.foregroundPackage()
+            if (packageName != null && packageName != _foregroundPackage.value) {
+                Log.i(TAG, "foreground app is now $packageName")
+                _foregroundPackage.value = packageName
+            }
+            delay(FOREGROUND_POLL_MS)
         }
     }
 
@@ -165,8 +200,12 @@ object RemoteCore {
 
     fun reloadSettings() {
         // The engine reads settings through a lambda, so the next frame already
-        // picks up new values; nothing else to do.
+        // picks up new values; the bridge needs the gesture scale pushed.
+        if (_started.value) bridge.gestureScale = preferences.gestureScale
     }
+
+    /** Per-app profiles, used by the app list and editor screens. */
+    val profiles: ProfileStore get() = profileStore
 
     fun startScan() = transport.startScan()
 

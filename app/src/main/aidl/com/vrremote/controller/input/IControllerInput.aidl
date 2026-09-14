@@ -32,4 +32,16 @@ interface IControllerInput {
      * for that, using the shell identity that is already running this service.
      */
     boolean grantOverlayPermission(String packageName) = 6;
+
+    /** Synthetic touch gestures, used by the per-app profiles. */
+    oneway void swipe(int x1, int y1, int x2, int y2, int durationMs) = 7;
+
+    oneway void tap(int x, int y) = 8;
+
+    oneway void doubleTap(int x, int y) = 9;
+
+    oneway void longPress(int x, int y) = 10;
+
+    /** Package name of the app in the foreground, or null when it is unknown. */
+    String foregroundPackage() = 11;
 }

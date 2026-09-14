@@ -14,12 +14,16 @@ import kotlin.math.roundToInt
 class RemoteEngine(
     initialMode: RemoteMode = RemoteMode.NORMAL,
     private val settings: () -> RemoteSettings = { RemoteSettings() },
+    private val profile: () -> AppProfile? = { null },
     private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
 
     companion object {
         /** Minimum gap between two trigger-driven mode switches. */
         private const val MODE_SWITCH_DEBOUNCE_MS = 300L
+
+        /** Touchpad travel that counts as a swipe inside a configured app. */
+        private const val PROFILE_SWIPE_THRESHOLD = 40
 
         /**
          * Rotation around the controller's yaw axis moves the cursor
@@ -52,6 +56,9 @@ class RemoteEngine(
 
     private var previousQuaternion: FloatArray? = null
     private var leftButtonDown = false
+
+    /** One swipe fires once; the latch clears when the finger leaves the pad. */
+    private var profileSwipeLatched = false
 
     /**
      * Sub-pixel pointer movement carried over between frames.
@@ -86,6 +93,7 @@ class RemoteEngine(
             actions += RemoteAction.PointerButton(RemoteButton.LEFT, false)
         }
         touchActive = false
+        profileSwipeLatched = false
         anchorX = 0
         anchorY = 0
         previousQuaternion = null
@@ -99,12 +107,24 @@ class RemoteEngine(
         val pressed = frame.buttonMask
 
         consumeTrigger(pressed, actions)
-        consumeRemoteKeys(pressed, actions)
 
         when (mode) {
-            RemoteMode.NORMAL -> consumeNormal(frame, pressed, actions)
-            RemoteMode.FLY_TOUCH -> consumeTouchFly(frame, pressed, actions)
-            RemoteMode.FLY_MOTION -> consumeMotionFly(frame, pressed, actions)
+            RemoteMode.NORMAL -> {
+                consumeRemoteKeys(pressed, actions)
+                consumeNormal(frame, pressed, actions)
+            }
+
+            RemoteMode.FLY_TOUCH -> {
+                consumeRemoteKeys(pressed, actions)
+                consumeTouchFly(frame, pressed, actions)
+            }
+
+            RemoteMode.FLY_MOTION -> {
+                consumeRemoteKeys(pressed, actions)
+                consumeMotionFly(frame, pressed, actions)
+            }
+
+            RemoteMode.PROFILE -> consumeProfile(frame, pressed, actions)
         }
 
         pressedBefore = pressed
@@ -260,6 +280,108 @@ class RemoteEngine(
         }
         anchorX = x
         anchorY = y
+    }
+
+    // --------------------------------------------------------- profile mode
+
+    /**
+     * Follows the app in the foreground: every trigger runs whatever that app
+     * was configured with. Apps without a profile do nothing at all.
+     */
+    private fun consumeProfile(
+        frame: ControllerFrame,
+        pressed: Int,
+        actions: MutableList<RemoteAction>,
+    ) {
+        val active = profile()?.takeIf { it.enabled } ?: run {
+            touchActive = false
+            profileSwipeLatched = false
+            return
+        }
+
+        consumePressEdge(
+            pressed = pressed,
+            mask = ControllerButton.CONFIRM.mask,
+            action = active.actionFor(ProfileTrigger.TOUCH_PRESS),
+            actions = actions,
+        )
+        consumePressEdge(
+            pressed = pressed,
+            mask = ControllerButton.VOLUME_UP.mask,
+            action = active.actionFor(ProfileTrigger.VOLUME_UP),
+            fallbackKey = RemoteKey.VOLUME_UP,
+            actions = actions,
+        )
+        consumePressEdge(
+            pressed = pressed,
+            mask = ControllerButton.VOLUME_DOWN.mask,
+            action = active.actionFor(ProfileTrigger.VOLUME_DOWN),
+            fallbackKey = RemoteKey.VOLUME_DOWN,
+            actions = actions,
+        )
+
+        if (!frame.touchpadTouched) {
+            touchActive = false
+            profileSwipeLatched = false
+            return
+        }
+        val x = frame.touchpadX
+        val y = frame.touchpadY
+        if (!touchActive) {
+            touchActive = true
+            profileSwipeLatched = false
+            anchorX = x
+            anchorY = y
+            return
+        }
+        if (profileSwipeLatched) return
+        val dx = x - anchorX
+        val dy = y - anchorY
+        if (abs(dx) < PROFILE_SWIPE_THRESHOLD && abs(dy) < PROFILE_SWIPE_THRESHOLD) return
+        val trigger = if (abs(dx) >= abs(dy)) {
+            if (dx > 0) ProfileTrigger.TOUCH_RIGHT else ProfileTrigger.TOUCH_LEFT
+        } else {
+            if (dy > 0) ProfileTrigger.TOUCH_DOWN else ProfileTrigger.TOUCH_UP
+        }
+        profileSwipeLatched = true
+        emitProfileAction(active.actionFor(trigger), actions)
+    }
+
+    private fun consumePressEdge(
+        pressed: Int,
+        mask: Int,
+        action: ProfileAction,
+        fallbackKey: Int? = null,
+        actions: MutableList<RemoteAction>,
+    ) {
+        val isDown = (pressed and mask) != 0
+        val wasDown = (pressedBefore and mask) != 0
+        if (!isDown || wasDown) return
+        // The volume keys keep behaving like volume unless the app rebinds them:
+        // silently swallowing them would surprise anyone who added an app just
+        // to remap the touchpad.
+        if (action == ProfileAction.NONE && fallbackKey != null) {
+            actions += RemoteAction.KeyPress(fallbackKey)
+            return
+        }
+        emitProfileAction(action, actions)
+    }
+
+    private fun emitProfileAction(action: ProfileAction, actions: MutableList<RemoteAction>) {
+        when (action) {
+            ProfileAction.NONE -> Unit
+            ProfileAction.SWIPE_UP -> actions += RemoteAction.Swipe(SwipeDirection.UP)
+            ProfileAction.SWIPE_DOWN -> actions += RemoteAction.Swipe(SwipeDirection.DOWN)
+            ProfileAction.SWIPE_LEFT -> actions += RemoteAction.Swipe(SwipeDirection.LEFT)
+            ProfileAction.SWIPE_RIGHT -> actions += RemoteAction.Swipe(SwipeDirection.RIGHT)
+            ProfileAction.TAP_LEFT -> actions += RemoteAction.Tap(TapPosition.LEFT)
+            ProfileAction.TAP_CENTER -> actions += RemoteAction.Tap(TapPosition.CENTER)
+            ProfileAction.TAP_RIGHT -> actions += RemoteAction.Tap(TapPosition.RIGHT)
+            ProfileAction.TAP_BOTTOM -> actions += RemoteAction.Tap(TapPosition.BOTTOM)
+            ProfileAction.DOUBLE_TAP -> actions += RemoteAction.DoubleTap(TapPosition.CENTER)
+            ProfileAction.LONG_PRESS -> actions += RemoteAction.LongPress(TapPosition.CENTER)
+            else -> action.keyCode?.let { actions += RemoteAction.KeyPress(it) }
+        }
     }
 
     // -------------------------------------------------------------------- maths

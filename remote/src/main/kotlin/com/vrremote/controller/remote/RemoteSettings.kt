@@ -17,4 +17,6 @@ data class RemoteSettings(
     val flyMotionGain: Float = 2600f,
     /** Rotation smaller than this (in radians) does not move the cursor. */
     val flyMotionDeadZone: Float = 0.001f,
+    /** Scales every gesture distance, 1.0 is the default amplitude. */
+    val gestureScale: Float = 1f,
 )
