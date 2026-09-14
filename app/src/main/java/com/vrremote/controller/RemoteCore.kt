@@ -7,6 +7,7 @@ import com.vrremote.controller.remote.RemoteAction
 import com.vrremote.controller.remote.RemoteEngine
 import com.vrremote.controller.remote.RemoteMode
 import com.vrremote.controller.remote.RemoteSettings
+import com.vrremote.controller.remote.foregroundUpdate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -129,9 +130,14 @@ object RemoteCore {
      */
     private suspend fun pollForegroundPackage() {
         while (scope.isActive && _mode.value == RemoteMode.PROFILE) {
-            val packageName = bridge.foregroundPackage()
-            if (packageName != null && packageName != _foregroundPackage.value) {
-                Log.i(TAG, "foreground app is now $packageName")
+            val update = foregroundUpdate(_foregroundPackage.value, bridge.foregroundPackage())
+            if (update.changed) {
+                val packageName = update.packageName
+                if (packageName == null) {
+                    Log.w(TAG, "cannot read the foreground app, profile mode is idle")
+                } else {
+                    Log.i(TAG, "foreground app is now $packageName")
+                }
                 _foregroundPackage.value = packageName
             }
             delay(FOREGROUND_POLL_MS)

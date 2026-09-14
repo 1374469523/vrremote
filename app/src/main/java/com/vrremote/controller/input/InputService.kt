@@ -17,6 +17,10 @@ class InputService : IControllerInput.Stub {
 
     private var context: Context? = null
 
+    /** Only the first foreground lookup failure is logged; it repeats every poll. */
+    @Volatile
+    private var lookupFailureLogged = false
+
     /** Shizuku instantiates this when no Context is available. */
     @Suppress("unused")
     constructor() : super()
@@ -190,12 +194,27 @@ class InputService : IControllerInput.Stub {
      */
     override fun foregroundPackage(): String? = runningTasksPackage()
 
-    private fun runningTasksPackage(): String? = try {
+    private fun runningTasksPackage(): String? {
         val manager = context?.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
-        manager?.getRunningTasks(1)?.firstOrNull()?.topActivity?.packageName
-    } catch (error: Exception) {
-        Log.w(TAG, "getRunningTasks failed", error)
-        null
+        if (manager == null) {
+            // Shizuku did not hand this service a Context, so the task stack cannot
+            // be read. Say so once: the profile mode would otherwise look broken
+            // with nothing in the log to explain it.
+            logLookupFailure("no Context in the user service, cannot read the foreground app")
+            return null
+        }
+        return try {
+            manager.getRunningTasks(1)?.firstOrNull()?.topActivity?.packageName
+        } catch (error: Exception) {
+            logLookupFailure("getRunningTasks failed: ${error.message}")
+            null
+        }
+    }
+
+    private fun logLookupFailure(message: String) {
+        if (lookupFailureLogged) return
+        lookupFailureLogged = true
+        Log.w(TAG, message)
     }
 
     private fun runInput(vararg args: String) {
