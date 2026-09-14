@@ -43,8 +43,8 @@ enum class ProfileAction(val label: String) {
     KEY_MEDIA_FAST_FORWARD("快进"),
     KEY_PAGE_UP("上一页"),
     KEY_PAGE_DOWN("下一页"),
-    KEY_CAMERA("拍照键"),
-    KEY_FOCUS("对焦键"),
+    KEY_CAMERA("拍照键（老式硬件键，多数相机不响应）"),
+    KEY_FOCUS("对焦键（同上）"),
 
     SWIPE_UP("屏幕手势 · 向上滑动"),
     SWIPE_DOWN("屏幕手势 · 向下滑动"),
@@ -113,7 +113,7 @@ data class AppProfile(
 enum class ProfileTemplate(val label: String, val description: String) {
     NOVEL("小说阅读", "左右点击翻页，上下滑动滚动，按下确定"),
     SHORT_VIDEO("短视频", "上下滑动切换，按下双击点赞"),
-    CAMERA("相机", "按下用快门键，音量键当快门"),
+    CAMERA("相机", "按下就是快门（发音量键，和蓝牙自拍器一样）"),
     BLANK("空白", "全部从“不设置”开始，自己配"),
     ;
 
@@ -137,7 +137,10 @@ enum class ProfileTemplate(val label: String, val description: String) {
         )
 
         CAMERA -> mapOf(
-            ProfileTrigger.TOUCH_PRESS to ProfileAction.KEY_CAMERA,
+            // The volume key is what every camera app treats as the shutter, and
+            // what Bluetooth selfie remotes send; KEYCODE_CAMERA is a legacy
+            // hardware key most cameras ignore (measured on the test device).
+            ProfileTrigger.TOUCH_PRESS to ProfileAction.KEY_VOLUME_UP,
             ProfileTrigger.VOLUME_UP to ProfileAction.KEY_VOLUME_UP,
             ProfileTrigger.VOLUME_DOWN to ProfileAction.KEY_VOLUME_DOWN,
         )

@@ -487,7 +487,7 @@ class RemoteEngineTest {
             ProfileTemplate.CAMERA.bindings()[ProfileTrigger.VOLUME_UP],
         )
         assertEquals(
-            ProfileAction.KEY_CAMERA,
+            ProfileAction.KEY_VOLUME_UP,
             ProfileTemplate.CAMERA.bindings()[ProfileTrigger.TOUCH_PRESS],
         )
         assertEquals(
