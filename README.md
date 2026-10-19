@@ -19,7 +19,8 @@
 ## 安装
 
 要求 Android 8.0 及以上，并已安装、启动 [Shizuku](https://shizuku.rikka.app/)。
-APK 从本仓库的 Releases 页面下载，安装后按下面的步骤授权即可。
+APK 从 [Releases](https://github.com/1374469523/vrremote/releases/latest) 下载，
+安装后按下面的步骤授权即可。
 
 ## 使用
 
